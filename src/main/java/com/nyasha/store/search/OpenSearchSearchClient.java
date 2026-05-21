@@ -176,21 +176,20 @@ public class OpenSearchSearchClient {
             if (Boolean.TRUE.equals(initialized)) {
                 return;
             }
-            createIndexIfMissing();
-            initialized = true;
+            initialized = createIndexIfMissing();
         }
     }
 
-    private void createIndexIfMissing() {
+    private boolean createIndexIfMissing() {
         try {
             String checkUrl = url(String.format("/%s", indexName));
             restTemplate.headForHeaders(checkUrl);
-            return;
+            return true;
         } catch (HttpClientErrorException.NotFound ignored) {
             // proceed to create index when not found
         } catch (RestClientResponseException ignored) {
-            // leave initialized and fail operations quickly later
-            return;
+            // leave uninitialized so a later operation can retry
+            return false;
         }
 
         try {
@@ -208,9 +207,14 @@ public class OpenSearchSearchClient {
                     "    }\n" +
                     "  }\n" +
                     "}\n";
-            restTemplate.put(url(String.format("/%s", indexName)), settings, String.class);
+            restTemplate.put(
+                    URI.create(url(String.format("/%s", indexName))),
+                    new HttpEntity<>(settings, jsonHeaders())
+            );
+            return true;
         } catch (RestClientResponseException ignored) {
             // best effort: if create fails, we'll retry on next operation
+            return false;
         }
     }
 

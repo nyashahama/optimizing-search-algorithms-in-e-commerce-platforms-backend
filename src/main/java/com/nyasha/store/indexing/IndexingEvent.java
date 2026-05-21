@@ -39,7 +39,6 @@ public class IndexingEvent {
     @Column(length = 2048)
     private String errorMessage;
 
-    @Lob
-    @Column(length = 4096)
+    @Column(columnDefinition = "TEXT")
     private String payload;
 }
