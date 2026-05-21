@@ -13,16 +13,16 @@ Compare search approaches across latency, indexing throughput, freshness, and re
 
 ## Current Phase
 
-Current phase: **Phase 0 - Stabilize Current Backend**
+Current phase: **Phase 1 - Search Abstraction**
 
-Phase 0 makes the existing Spring Boot backend buildable, testable, documented, and safe enough to support the search benchmarking lab.
+Phase 0 made the existing Spring Boot backend buildable, testable, documented, and safe enough to support the search benchmarking lab. Phase 1 adds a common search abstraction so search engines can be compared through one API.
 
 ## Phase Roadmap
 
 | Phase | Name | Status |
 | --- | --- | --- |
-| Phase 0 | Stabilize Current Backend | Current |
-| Phase 1 | Search Abstraction | Next |
+| Phase 0 | Stabilize Current Backend | Complete |
+| Phase 1 | Search Abstraction | Current |
 | Phase 2 | Infrastructure | Upcoming |
 | Phase 3 | Event-Driven Indexing | Upcoming |
 | Phase 4 | Benchmarking | Upcoming |

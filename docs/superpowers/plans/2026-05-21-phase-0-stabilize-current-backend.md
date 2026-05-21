@@ -1,6 +1,6 @@
 # Phase 0 Stabilize Current Backend Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Make the current Spring Boot backend buildable, testable, documented, and safe enough to serve as the baseline for the search benchmarking lab.
 
@@ -61,7 +61,7 @@ export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 - Create: `src/test/resources/application-test.properties`
 - Modify: `src/test/java/com/nyasha/store/StoreApplicationTests.java`
 
-- [ ] **Step 1: Write the failing context-load test profile**
+- [x] **Step 1: Write the failing context-load test profile**
 
 Replace `src/test/java/com/nyasha/store/StoreApplicationTests.java` with:
 
@@ -82,7 +82,7 @@ class StoreApplicationTests {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify the current runtime gap**
+- [x] **Step 2: Run the test to verify the current runtime gap**
 
 Run:
 
@@ -92,7 +92,7 @@ Run:
 
 Expected before this task is complete: FAIL because the test profile is not configured and/or H2 is unavailable.
 
-- [ ] **Step 3: Add H2 as a test dependency**
+- [x] **Step 3: Add H2 as a test dependency**
 
 In `pom.xml`, add this dependency inside `<dependencies>`:
 
@@ -104,7 +104,7 @@ In `pom.xml`, add this dependency inside `<dependencies>`:
 </dependency>
 ```
 
-- [ ] **Step 4: Add test datasource configuration**
+- [x] **Step 4: Add test datasource configuration**
 
 Create `src/test/resources/application-test.properties`:
 
@@ -122,7 +122,7 @@ spring.main.allow-bean-definition-overriding=true
 logging.level.org.springframework.security=warn
 ```
 
-- [ ] **Step 5: Run the context test again**
+- [x] **Step 5: Run the context test again**
 
 Run:
 
@@ -132,7 +132,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add pom.xml src/test/resources/application-test.properties src/test/java/com/nyasha/store/StoreApplicationTests.java
@@ -148,7 +148,7 @@ git commit -m "test: add isolated Spring Boot test profile"
 - Modify: `src/main/java/com/nyasha/store/controllers/UserController.java`
 - Test: `src/test/java/com/nyasha/store/controllers/UserControllerTest.java`
 
-- [ ] **Step 1: Write the failing controller test**
+- [x] **Step 1: Write the failing controller test**
 
 Create `src/test/java/com/nyasha/store/controllers/UserControllerTest.java`:
 
@@ -218,7 +218,7 @@ class UserControllerTest {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -228,7 +228,7 @@ Run:
 
 Expected: FAIL because `UserController` does not have a constructor accepting `UserService`, and `UserResponse` does not exist.
 
-- [ ] **Step 3: Add the user response DTO**
+- [x] **Step 3: Add the user response DTO**
 
 Create `src/main/java/com/nyasha/store/dtos/UserResponse.java`:
 
@@ -259,7 +259,7 @@ public record UserResponse(
 }
 ```
 
-- [ ] **Step 4: Refactor `UserController` to constructor injection and DTO responses**
+- [x] **Step 4: Refactor `UserController` to constructor injection and DTO responses**
 
 Replace `src/main/java/com/nyasha/store/controllers/UserController.java` with:
 
@@ -350,7 +350,7 @@ public class UserController {
 }
 ```
 
-- [ ] **Step 5: Run the controller test**
+- [x] **Step 5: Run the controller test**
 
 Run:
 
@@ -360,7 +360,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 6: Run all tests**
+- [x] **Step 6: Run all tests**
 
 Run:
 
@@ -370,7 +370,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/main/java/com/nyasha/store/dtos/UserResponse.java src/main/java/com/nyasha/store/controllers/UserController.java src/test/java/com/nyasha/store/controllers/UserControllerTest.java
@@ -384,7 +384,7 @@ git commit -m "fix: return sanitized user response DTOs"
 **Files:**
 - Test: `src/test/java/com/nyasha/store/utils/ProductIndexTest.java`
 
-- [ ] **Step 1: Write ProductIndex tests**
+- [x] **Step 1: Write ProductIndex tests**
 
 Create `src/test/java/com/nyasha/store/utils/ProductIndexTest.java`:
 
@@ -486,7 +486,7 @@ class ProductIndexTest {
 }
 ```
 
-- [ ] **Step 2: Run the ProductIndex tests**
+- [x] **Step 2: Run the ProductIndex tests**
 
 Run:
 
@@ -496,7 +496,7 @@ Run:
 
 Expected: PASS. If any test fails because result ordering is unstable, preserve the behavior and change only the assertion to use `containsExactlyInAnyOrder`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/test/java/com/nyasha/store/utils/ProductIndexTest.java
@@ -510,7 +510,7 @@ git commit -m "test: cover product search index behavior"
 **Files:**
 - Test: `src/test/java/com/nyasha/store/utils/UserIndexTest.java`
 
-- [ ] **Step 1: Write UserIndex tests**
+- [x] **Step 1: Write UserIndex tests**
 
 Create `src/test/java/com/nyasha/store/utils/UserIndexTest.java`:
 
@@ -579,7 +579,7 @@ class UserIndexTest {
 }
 ```
 
-- [ ] **Step 2: Run the UserIndex tests**
+- [x] **Step 2: Run the UserIndex tests**
 
 Run:
 
@@ -589,7 +589,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/test/java/com/nyasha/store/utils/UserIndexTest.java
@@ -603,7 +603,7 @@ git commit -m "test: cover user search index behavior"
 **Files:**
 - Test: `src/test/java/com/nyasha/store/services/ProductServiceTest.java`
 
-- [ ] **Step 1: Write ProductService tests**
+- [x] **Step 1: Write ProductService tests**
 
 Create `src/test/java/com/nyasha/store/services/ProductServiceTest.java`:
 
@@ -707,7 +707,7 @@ class ProductServiceTest {
 }
 ```
 
-- [ ] **Step 2: Run the ProductService tests**
+- [x] **Step 2: Run the ProductService tests**
 
 Run:
 
@@ -717,7 +717,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/test/java/com/nyasha/store/services/ProductServiceTest.java
@@ -732,7 +732,7 @@ git commit -m "test: cover product service stabilization"
 - Create or modify: `README.md`
 - Modify: `docs/superpowers/specs/2026-05-21-search-benchmarking-lab-design.md`
 
-- [ ] **Step 1: Add README**
+- [x] **Step 1: Add README**
 
 Create `README.md`:
 
@@ -811,7 +811,7 @@ The API starts on `http://localhost:8080`.
 - `docs/superpowers/plans/2026-05-21-phase-0-stabilize-current-backend.md`
 ```
 
-- [ ] **Step 2: Confirm the design spec still marks Phase 0 as current**
+- [x] **Step 2: Confirm the design spec still marks Phase 0 as current**
 
 Check:
 
@@ -821,7 +821,7 @@ rg -n "Current phase: Phase 0|Phase 1" docs/superpowers/specs/2026-05-21-search-
 
 Expected: both files identify Phase 0 as current and Phase 1 as next.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add README.md docs/superpowers/specs/2026-05-21-search-benchmarking-lab-design.md
@@ -835,7 +835,7 @@ git commit -m "docs: document phase zero backend stabilization"
 **Files:**
 - No code files expected unless verification exposes a defect.
 
-- [ ] **Step 1: Run full tests**
+- [x] **Step 1: Run full tests**
 
 Run:
 
@@ -845,7 +845,7 @@ Run:
 
 Expected: BUILD SUCCESS.
 
-- [ ] **Step 2: Verify working tree**
+- [x] **Step 2: Verify working tree**
 
 Run:
 
@@ -861,7 +861,7 @@ Expected:
 
 No modified or untracked files should appear.
 
-- [ ] **Step 3: Push the branch**
+- [x] **Step 3: Push the branch**
 
 Run:
 
@@ -871,7 +871,7 @@ git push
 
 Expected: branch pushes to `origin/complete-backend-stabilization`.
 
-- [ ] **Step 4: Check PR status**
+- [x] **Step 4: Check PR status**
 
 Run:
 
@@ -885,7 +885,7 @@ Expected:
 - `mergeable` is `MERGEABLE` or `UNKNOWN` while GitHub recalculates.
 - Any required checks are passing or still pending, not failed.
 
-- [ ] **Step 5: Add a PR comment with Phase 0 verification**
+- [x] **Step 5: Add a PR comment with Phase 0 verification**
 
 Run:
 

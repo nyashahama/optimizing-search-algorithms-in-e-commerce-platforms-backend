@@ -8,16 +8,16 @@ The project should remain Java/Spring Boot. Java is a good fit here because the 
 
 ## Current Phase
 
-**Current phase: Phase 0 - Stabilize the current backend PR.**
+**Current phase: Phase 1 - Search Abstraction.**
 
-The open stabilization PR should be merged or carried forward first, then the search benchmarking lab should be implemented in separate phases. Each phase should leave the backend runnable and testable.
+Phase 0 stabilization is complete and verified. Phase 1 should add the common search abstraction so SQL LIKE, PostgreSQL full-text search, the in-memory index, and OpenSearch can be compared through one API.
 
 ## Phase Tracker
 
 | Phase | Name | Purpose | Status |
 | --- | --- | --- | --- |
-| Phase 0 | Stabilize Current Backend | Ensure the existing Spring Boot app builds, current PR is clean, Java tooling is available, and baseline endpoints behave predictably. | Current |
-| Phase 1 | Search Abstraction | Add a common search interface so SQL LIKE, PostgreSQL full-text search, in-memory index, and OpenSearch can be compared through one API. | Next |
+| Phase 0 | Stabilize Current Backend | Ensure the existing Spring Boot app builds, current PR is clean, Java tooling is available, and baseline endpoints behave predictably. | Complete |
+| Phase 1 | Search Abstraction | Add a common search interface so SQL LIKE, PostgreSQL full-text search, in-memory index, and OpenSearch can be compared through one API. | Current |
 | Phase 2 | Infrastructure | Add Docker Compose for PostgreSQL, Kafka, OpenSearch, and local development profiles. | Upcoming |
 | Phase 3 | Event-Driven Indexing | Publish product events to Kafka and consume them with an indexer worker that syncs OpenSearch asynchronously. | Upcoming |
 | Phase 4 | Benchmarking | Add query sets, relevance judgments, benchmark runs, metric collection, and report generation. | Upcoming |
