@@ -44,7 +44,9 @@ public class AddressService {
                 .orElseThrow(() -> new RuntimeException("Address not found"));
         address.setStreet(addressDetails.getStreet());
         address.setCity(addressDetails.getCity());
-        // Update other fields
+        address.setState(addressDetails.getState());
+        address.setCountry(addressDetails.getCountry());
+        address.setZip(addressDetails.getZip());
         return addressRepository.save(address);
     }
 

@@ -4,11 +4,13 @@ package com.nyasha.store.services;
 import com.nyasha.store.entities.Product;
 import com.nyasha.store.repositories.ProductRepository;
 import com.nyasha.store.utils.ProductIndex;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -27,9 +29,20 @@ public class ProductService {
         this.productIndex = productIndex;
     }
 
+    @PostConstruct
+    public void initializeIndex() {
+        try {
+            productIndex.rebuild(productRepository.findAll());
+            logger.info("Product index initialized with {} products", productRepository.count());
+        } catch (Exception e) {
+            logger.error("Error initializing product index: {}", e.getMessage(), e);
+            throw new RuntimeException("Product initialization failed: " + e.getMessage());
+        }
+    }
+
     // Create a product and add it to the product index
     public Product createProduct(Product product) {
-        //product.setCreatedAt(LocalDateTime.now());
+        requireProduct(product);
         try {
             Product savedProduct = productRepository.save(product);
             productIndex.insert(savedProduct);
@@ -57,6 +70,7 @@ public class ProductService {
         try {
             Product existingProduct = productRepository.findById(id)
                     .orElseThrow(() -> new RuntimeException("Product not found"));
+            requireProduct(productDetails);
 
             // Capture the old state for index update
             Product oldProduct = new Product();
@@ -64,7 +78,11 @@ public class ProductService {
             oldProduct.setName(existingProduct.getName());
             oldProduct.setSku(existingProduct.getSku());
             oldProduct.setDescription(existingProduct.getDescription());
-            oldProduct.setCategories(existingProduct.getCategories());
+            oldProduct.setCategories(
+                    existingProduct.getCategories() != null
+                            ? new HashSet<>(existingProduct.getCategories())
+                            : new HashSet<>()
+            );
 
             // Apply updates
             existingProduct.setName(productDetails.getName());
@@ -123,6 +141,29 @@ public class ProductService {
 
     // Get products by category
     public List<Product> getProductsByCategory(String categoryId) {
-        return productIndex.searchByCategory(categoryId);
+        if (categoryId == null || categoryId.isBlank()) {
+            return List.of();
+        }
+
+        try {
+            return productRepository.findByCategoryId(Long.valueOf(categoryId));
+        } catch (NumberFormatException e) {
+            return productIndex.searchByCategory(categoryId);
+        }
+    }
+
+    private void requireProduct(Product product) {
+        if (product == null) {
+            throw new RuntimeException("Product payload is required");
+        }
+        if (product.getName() == null || product.getName().isBlank()) {
+            throw new RuntimeException("Product name is required");
+        }
+        if (product.getSku() == null || product.getSku().isBlank()) {
+            throw new RuntimeException("Product sku is required");
+        }
+        if (product.getBasePrice() == null || product.getBasePrice() < 0) {
+            throw new RuntimeException("Product base price must be zero or positive");
+        }
     }
 }
