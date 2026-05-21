@@ -13,8 +13,8 @@ Compare search approaches across latency, indexing throughput, freshness, and re
 
 ## Project Status
 
-Current phase: **Complete - Ready For Review And Merge**
-Next phase: **Post-Merge Product Hardening**
+Current phase: **Complete**
+Next phase: **Production Readiness Monitoring**
 
 Phase 0 made the existing Spring Boot backend buildable, testable, documented, and safe enough to support the search benchmarking lab. Phase 1 added a common search abstraction so search engines can be compared through one API. Phase 2 added infrastructure dependencies for local development. Phase 3 added event-driven indexing and OpenSearch synchronization. Phase 4 implemented benchmark execution, metrics, and report artifacts. Phase 5 added completion docs, repeatable runbook, and verification guidance.
 
@@ -61,7 +61,7 @@ Expected: Java 21.
 - `GET /api/products/search?query=wireless` delegates to the in-memory engine for backward compatibility.
 - `POST /api/index/rebuild` rebuilds the OpenSearch index.
 - `GET /api/index/status` reports document count plus event queue health including backpressure indicators.
-- `POST /api/benchmarks/runs` starts a benchmark run.
+- `POST /api/benchmarks/runs` starts a benchmark run and returns `202 Accepted` with status `QUEUED`.
 - `GET /api/benchmarks/runs/{runId}` returns run status and summary.
 - `GET /api/benchmarks/runs/{runId}/results` returns benchmark row results.
 - `GET /api/benchmarks/runs/{runId}/report.md` downloads a markdown benchmark report.
@@ -75,7 +75,7 @@ Expected: Java 21.
 
 ```bash
 cp .env.example .env
-docker compose up -d
+docker compose up --build -d
 set -a
 source .env
 set +a
@@ -94,6 +94,10 @@ export SPRING_DATASOURCE_PASSWORD=change-me
 ```
 
 The API starts on `http://localhost:8080`.
+
+Benchmark execution is asynchronous:
+- `POST /api/benchmarks/runs` returns quickly with `status=QUEUED`.
+- Poll `GET /api/benchmarks/runs/{runId}` until `COMPLETED` or `FAILED`.
 
 ## Benchmark Dataset Seeding and Startup
 
@@ -125,16 +129,16 @@ source .env
 set +a
 ```
 
-2. Start the API:
+2. Start the API (services include the application container now):
 
 ```bash
-SPRING_PROFILES_ACTIVE=docker ./mvnw spring-boot:run
+docker compose up --build -d
 ```
 
 3. Run benchmark on the seeded dataset:
 
 ```bash
-curl -s -X POST "http://localhost:8080/api/benchmarks/runs" \
+curl -i -s -X POST "http://localhost:8080/api/benchmarks/runs" \
   -H "Content-Type: application/json" \
   -d '{"limit":20}'
 ```
@@ -148,6 +152,17 @@ RUN_ID=$(curl -s -X POST "http://localhost:8080/api/benchmarks/runs" \
 curl -s "http://localhost:8080/api/benchmarks/runs/${RUN_ID}"
 ```
 
+Wait for `status` to become `COMPLETED` before reading the report:
+
+```bash
+until curl -s "http://localhost:8080/api/benchmarks/runs/${RUN_ID}" | jq -r '.status' \
+  | grep -q 'COMPLETED\|FAILED'; do
+  sleep 1
+done
+
+curl -s "http://localhost:8080/api/benchmarks/runs/${RUN_ID}/report.md"
+```
+
 Expected output includes: `status`, `throughputQueriesPerSecond`, `latencyP50Ms`, `latencyP95Ms`, `latencyP99Ms`, `freshnessP50Ms`.
 
 5. Fetch benchmark artifacts and verify files exist:
@@ -159,6 +174,14 @@ curl -s "http://localhost:8080/api/benchmarks/runs/${RUN_ID}/latency.csv"
 curl -s "http://localhost:8080/api/benchmarks/runs/${RUN_ID}/relevance.csv"
 ls -R reports
 ```
+
+### Rate Limiting
+
+- Configure request-rate controls with:
+  - `SECURITY_RATE_LIMIT_ENABLED` (`true`/`false`)
+  - `SECURITY_RATE_LIMIT_REQUESTS_PER_MINUTE` (default: `120`)
+  - `SECURITY_RATE_LIMIT_WINDOW_MS` (default: `60000`)
+- Exceeded limits return `429 Too Many Requests` with `Retry-After`.
 
 ## Metrics Interpretation
 
