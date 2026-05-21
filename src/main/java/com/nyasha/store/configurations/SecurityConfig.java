@@ -1,13 +1,14 @@
 package com.nyasha.store.configurations;
 
+import com.nyasha.store.security.ApiRateLimitFilter;
+import jakarta.servlet.Filter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -16,11 +17,25 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.List;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
 @Configuration
 public class SecurityConfig {
+    private final boolean rateLimitEnabled;
+    private final int rateLimitRequestsPerMinute;
+    private final long rateLimitWindowMs;
+
+    public SecurityConfig(
+            @Value("${security.rate-limit.enabled:true}") boolean rateLimitEnabled,
+            @Value("${security.rate-limit.requests-per-minute:120}") int rateLimitRequestsPerMinute,
+            @Value("${security.rate-limit.window-ms:60000}") long rateLimitWindowMs
+    ) {
+        this.rateLimitEnabled = rateLimitEnabled;
+        this.rateLimitRequestsPerMinute = rateLimitRequestsPerMinute;
+        this.rateLimitWindowMs = rateLimitWindowMs;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -28,22 +43,13 @@ public class SecurityConfig {
     }
 
     @Bean
-    public UserDetailsService userDetailsService() {
-        UserDetails adminUser = User.builder()
-                .username("admin")
-                .password(passwordEncoder().encode("admin123"))
-                .roles("ADMIN", "USER")
-                .build();
-
-        return new InMemoryUserDetailsManager(adminUser);
-    }
-
-    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.disable())  // Disabled CSRF for Postman or API testing
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))  // Enable CORS
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers(HttpMethod.POST, "/users/register", "/users/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/users/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/users/**").hasRole("ADMIN")
@@ -53,23 +59,30 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/products/**", "/api/categories/**", "/addresses/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/products/**", "/api/categories/**", "/addresses/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/products/**", "/api/categories/**", "/addresses/**").hasRole("ADMIN")
+                        .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
+                .addFilterBefore(rateLimitFilter(), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
                 .httpBasic(withDefaults());
 
         return http.build();
     }
 
     @Bean
+    public Filter rateLimitFilter() {
+        return new ApiRateLimitFilter(rateLimitEnabled, rateLimitRequestsPerMinute, rateLimitWindowMs, java.time.Clock.systemUTC());
+    }
+
+    @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000", "http://localhost:4200"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));  // Allow all headers
-        configuration.setAllowCredentials(true);  // Allow credentials (e.g., for Basic Auth)
+        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:4200"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);  // Apply to all endpoints
+        source.registerCorsConfiguration("/**", configuration);
         return source;
     }
 }
