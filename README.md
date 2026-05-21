@@ -78,7 +78,7 @@ docker compose up -d
 SPRING_PROFILES_ACTIVE=docker \
 SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/store_db \
 SPRING_DATASOURCE_USERNAME=postgres \
-SPRING_DATASOURCE_PASSWORD=Gyver \
+SPRING_DATASOURCE_PASSWORD=change-me
 SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
 ./mvnw spring-boot:run
 ```
@@ -90,7 +90,7 @@ Set PostgreSQL connection values if your local database differs from the default
 ```bash
 export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/store_db
 export SPRING_DATASOURCE_USERNAME=postgres
-export SPRING_DATASOURCE_PASSWORD=Gyver
+export SPRING_DATASOURCE_PASSWORD=change-me
 ./mvnw spring-boot:run
 ```
 
@@ -183,7 +183,7 @@ If startup fails with connection errors, confirm:
 ```bash
 export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/store_db
 export SPRING_DATASOURCE_USERNAME=postgres
-export SPRING_DATASOURCE_PASSWORD=Gyver
+export SPRING_DATASOURCE_PASSWORD=change-me
 ```
 
 Then restart the app.
