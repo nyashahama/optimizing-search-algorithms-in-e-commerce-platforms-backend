@@ -2,6 +2,7 @@ package com.nyasha.store.repositories;
 
 import com.nyasha.store.entities.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -13,5 +14,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findByNameContainingIgnoreCase(String searchTerm);
 
+    @EntityGraph(attributePaths = "roles")
     Optional<User> findByEmail(String email);
 }
