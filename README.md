@@ -13,17 +13,17 @@ Compare search approaches across latency, indexing throughput, freshness, and re
 
 ## Current Phase
 
-Current phase: **Phase 1 - Search Abstraction**
+Current phase: **Phase 2 - Infrastructure**
 
-Phase 0 made the existing Spring Boot backend buildable, testable, documented, and safe enough to support the search benchmarking lab. Phase 1 adds a common search abstraction so search engines can be compared through one API.
+Phase 0 made the existing Spring Boot backend buildable, testable, documented, and safe enough to support the search benchmarking lab. Phase 1 added a common search abstraction so search engines can be compared through one API. Phase 2 adds infrastructure dependencies for local development.
 
 ## Phase Roadmap
 
 | Phase | Name | Status |
 | --- | --- | --- |
 | Phase 0 | Stabilize Current Backend | Complete |
-| Phase 1 | Search Abstraction | Current |
-| Phase 2 | Infrastructure | Upcoming |
+| Phase 1 | Search Abstraction | Complete |
+| Phase 2 | Infrastructure | Current |
 | Phase 3 | Event-Driven Indexing | Upcoming |
 | Phase 4 | Benchmarking | Upcoming |
 | Phase 5 | Verification And Documentation | Upcoming |
@@ -61,6 +61,21 @@ Expected: Java 21.
 
 ## Run The API Locally
 
+### With local Docker services (recommended for phase 2)
+
+```bash
+cp .env.example .env
+docker compose up -d
+SPRING_PROFILES_ACTIVE=docker \
+SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/store_db \
+SPRING_DATASOURCE_USERNAME=postgres \
+SPRING_DATASOURCE_PASSWORD=Gyver \
+SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
+./mvnw spring-boot:run
+```
+
+### Without Docker
+
 Set PostgreSQL connection values if your local database differs from the defaults:
 
 ```bash
@@ -76,3 +91,5 @@ The API starts on `http://localhost:8080`.
 
 - `docs/superpowers/specs/2026-05-21-search-benchmarking-lab-design.md`
 - `docs/superpowers/plans/2026-05-21-phase-0-stabilize-current-backend.md`
+- `docs/superpowers/plans/2026-05-21-phase-1-search-abstraction.md`
+- `docs/superpowers/plans/2026-05-21-phase-2-infrastructure.md`
