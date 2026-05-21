@@ -2,6 +2,7 @@ package com.nyasha.store.entities;
 
 import jakarta.persistence.*;
 import lombok.Data;
+
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
@@ -18,7 +19,11 @@ public class Product {
     private String description;
     private Double basePrice;
     private String sku;
+    private String brand;
+    private String attributes;
+    private String inventoryStatus;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 
     @ManyToOne
     @JoinColumn(name = "supplier_id")
@@ -41,5 +46,11 @@ public class Product {
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
+        this.updatedAt = this.createdAt;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
     }
 }

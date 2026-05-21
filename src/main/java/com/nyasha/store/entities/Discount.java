@@ -16,6 +16,7 @@ public class Discount {
 
     private String code;
     private String type; // Percentage/Fixed
+    @Column(name = "discount_value")
     private Double value;
     private LocalDateTime validFrom;
     private LocalDateTime validTo;

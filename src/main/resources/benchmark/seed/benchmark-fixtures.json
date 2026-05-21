@@ -1,0 +1,18 @@
+{
+  "querySets": [
+    {
+      "name": "electronics-basic",
+      "description": "Starter query set for e-commerce search benchmarking",
+      "queries": [
+        {"text": "wireless headphones", "position": 1},
+        {"text": "gaming laptop", "position": 2},
+        {"text": "running shoes", "position": 3}
+      ],
+      "judgments": [
+        {"queryText": "wireless headphones", "productId": 1, "relevance": 3},
+        {"queryText": "gaming laptop", "productId": 2, "relevance": 3},
+        {"queryText": "running shoes", "productId": 3, "relevance": 3}
+      ]
+    }
+  ]
+}

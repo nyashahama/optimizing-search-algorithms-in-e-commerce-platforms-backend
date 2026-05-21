@@ -15,6 +15,9 @@ public interface ProductRepository extends JpaRepository<Product,Long> {
     List<Product> findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(String name, String description, Pageable pageable);
     List<Product> findBySku(String sku);
 
+    @Query(value = "SELECT * FROM products p WHERE to_tsvector('english', COALESCE(p.name, '') || ' ' || COALESCE(p.description, '')) @@ plainto_tsquery('english', :query)", nativeQuery = true)
+    List<Product> searchByPostgresFullText(@Param("query") String query, Pageable pageable);
+
     @Query("SELECT p FROM Product p JOIN p.categories c WHERE c.categoryId = :categoryId")
     List<Product> findByCategoryId(@Param("categoryId") Long categoryId);
 }

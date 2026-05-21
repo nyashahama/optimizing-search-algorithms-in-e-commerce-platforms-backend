@@ -2,6 +2,7 @@ package com.nyasha.store.services;
 
 
 import com.nyasha.store.entities.Product;
+import com.nyasha.store.indexing.SearchIndexingPublisher;
 import com.nyasha.store.repositories.ProductRepository;
 import com.nyasha.store.utils.ProductIndex;
 import jakarta.annotation.PostConstruct;
@@ -22,11 +23,17 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final ProductIndex productIndex;
+    private final SearchIndexingPublisher indexingPublisher;
 
     @Autowired
-    public ProductService(ProductRepository productRepository, ProductIndex productIndex) {
+    public ProductService(
+            ProductRepository productRepository,
+            ProductIndex productIndex,
+            SearchIndexingPublisher indexingPublisher
+    ) {
         this.productRepository = productRepository;
         this.productIndex = productIndex;
+        this.indexingPublisher = indexingPublisher;
     }
 
     @PostConstruct
@@ -46,6 +53,8 @@ public class ProductService {
         try {
             Product savedProduct = productRepository.save(product);
             productIndex.insert(savedProduct);
+            publishIndexingEvent(savedProduct, "Product creation")
+                    .ifPresent(indexingEvent -> logger.debug("Published indexing event {} for product {}", indexingEvent.getEventId(), savedProduct.getProductId()));
             logger.info("Created product with id {}", savedProduct.getProductId());
             return savedProduct;
         } catch (Exception e) {
@@ -93,6 +102,8 @@ public class ProductService {
 
             Product updatedProduct = productRepository.save(existingProduct);
             productIndex.update(oldProduct, updatedProduct);
+            publishIndexingEvent(updatedProduct, "Product update")
+                    .ifPresent(indexingEvent -> logger.debug("Published indexing event {} for product {}", indexingEvent.getEventId(), updatedProduct.getProductId()));
             logger.info("Updated product with id {}", updatedProduct.getProductId());
             return updatedProduct;
         } catch (RuntimeException e) {
@@ -108,6 +119,8 @@ public class ProductService {
                     .orElseThrow(() -> new RuntimeException("Product not found"));
             productIndex.remove(product);
             productRepository.delete(product);
+            publishDeleteEvent(id, "Product deletion")
+                    .ifPresent(indexingEvent -> logger.debug("Published deletion indexing event {} for product {}", indexingEvent.getEventId(), id));
             logger.info("Deleted product with id {}", id);
         } catch (RuntimeException e) {
             logger.error("Error deleting product with id {}: {}", id, e.getMessage(), e);
@@ -164,6 +177,32 @@ public class ProductService {
         }
         if (product.getBasePrice() == null || product.getBasePrice() < 0) {
             throw new RuntimeException("Product base price must be zero or positive");
+        }
+    }
+
+    private java.util.Optional<com.nyasha.store.indexing.IndexingEvent> publishIndexingEvent(Product product, String action) {
+        if (indexingPublisher == null) {
+            logger.debug("{} skipped for product {} because publisher is unavailable", action, product.getProductId());
+            return java.util.Optional.empty();
+        }
+        try {
+            return java.util.Optional.of(indexingPublisher.publish(product, com.nyasha.store.indexing.IndexingEventType.UPSERT));
+        } catch (Exception ex) {
+            logger.warn("{} publish failed for product {}: {}", action, product.getProductId(), ex.getMessage());
+            return java.util.Optional.empty();
+        }
+    }
+
+    private java.util.Optional<com.nyasha.store.indexing.IndexingEvent> publishDeleteEvent(Long productId, String action) {
+        if (indexingPublisher == null) {
+            logger.debug("{} skipped for product {} because publisher is unavailable", action, productId);
+            return java.util.Optional.empty();
+        }
+        try {
+            return java.util.Optional.of(indexingPublisher.publishDelete(productId));
+        } catch (Exception ex) {
+            logger.warn("{} publish failed for product {}: {}", action, productId, ex.getMessage());
+            return java.util.Optional.empty();
         }
     }
 }

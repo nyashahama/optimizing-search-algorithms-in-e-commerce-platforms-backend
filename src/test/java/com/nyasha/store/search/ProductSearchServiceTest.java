@@ -6,7 +6,9 @@ import com.nyasha.store.utils.ProductIndex;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageRequest;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -19,15 +21,16 @@ class ProductSearchServiceTest {
     void defaultEngineFallsBackToInMemoryWithNormalizedLimit() {
         ProductRepository productRepository = mock(ProductRepository.class);
         ProductIndex productIndex = mock(ProductIndex.class);
+        OpenSearchSearchClient openSearchSearchClient = mock(OpenSearchSearchClient.class);
 
         ProductSearchService service = new ProductSearchService(List.of(
                 new SqlLikeProductSearchEngine(productRepository),
                 new InMemoryProductSearchEngine(productIndex),
-                new PostgresFullTextSearchEngine(),
-                new OpenSearchProductSearchEngine()
+                new PostgresFullTextSearchEngine(productRepository),
+                new OpenSearchProductSearchEngine(openSearchSearchClient, productRepository)
         ));
 
-        when(productIndex.searchByText("shoe")).thenReturn(List.of(product(1L, "Sneaker"), product(2L, "Shoe rack")));
+        when(productIndex.searchByText("shoe")).thenReturn(new LinkedHashSet<>(List.of(product(1L, "Sneaker"), product(2L, "Shoe rack"))));
 
         var result = service.search("inmemory", "shoe", 1);
 
@@ -40,12 +43,13 @@ class ProductSearchServiceTest {
     void sqlLikeUsesConfiguredLimitAndRepositoryQuery() {
         ProductRepository productRepository = mock(ProductRepository.class);
         ProductIndex productIndex = mock(ProductIndex.class);
+        OpenSearchSearchClient openSearchSearchClient = mock(OpenSearchSearchClient.class);
 
         ProductSearchService service = new ProductSearchService(List.of(
                 new SqlLikeProductSearchEngine(productRepository),
                 new InMemoryProductSearchEngine(productIndex),
-                new PostgresFullTextSearchEngine(),
-                new OpenSearchProductSearchEngine()
+                new PostgresFullTextSearchEngine(productRepository),
+                new OpenSearchProductSearchEngine(openSearchSearchClient, productRepository)
         ));
 
         Product expected = product(1L, "Shoe rack");
@@ -66,12 +70,13 @@ class ProductSearchServiceTest {
     void compareIncludesAllPlannedEngines() {
         ProductRepository productRepository = mock(ProductRepository.class);
         ProductIndex productIndex = mock(ProductIndex.class);
+        OpenSearchSearchClient openSearchSearchClient = mock(OpenSearchSearchClient.class);
 
         ProductSearchService service = new ProductSearchService(List.of(
                 new SqlLikeProductSearchEngine(productRepository),
                 new InMemoryProductSearchEngine(productIndex),
-                new PostgresFullTextSearchEngine(),
-                new OpenSearchProductSearchEngine()
+                new PostgresFullTextSearchEngine(productRepository),
+                new OpenSearchProductSearchEngine(openSearchSearchClient, productRepository)
         ));
 
         var response = service.compare("shoe", 5);
@@ -79,20 +84,21 @@ class ProductSearchServiceTest {
         assertThat(response.results()).hasSize(4);
         assertThat(response.results()).anyMatch(r -> r.engine() == SearchEngineType.IN_MEMORY && r.supported());
         assertThat(response.results()).anyMatch(r -> r.engine() == SearchEngineType.SQL_LIKE && r.supported());
-        assertThat(response.results()).anyMatch(r -> r.engine() == SearchEngineType.POSTGRES_FTS && !r.supported());
-        assertThat(response.results()).anyMatch(r -> r.engine() == SearchEngineType.OPENSEARCH && !r.supported());
+        assertThat(response.results()).anyMatch(r -> r.engine() == SearchEngineType.POSTGRES_FTS && r.supported());
+        assertThat(response.results()).anyMatch(r -> r.engine() == SearchEngineType.OPENSEARCH && r.supported());
     }
 
     @Test
     void invalidEngineNameIsRejected() {
         ProductRepository productRepository = mock(ProductRepository.class);
         ProductIndex productIndex = mock(ProductIndex.class);
+        OpenSearchSearchClient openSearchSearchClient = mock(OpenSearchSearchClient.class);
 
         ProductSearchService service = new ProductSearchService(List.of(
                 new SqlLikeProductSearchEngine(productRepository),
                 new InMemoryProductSearchEngine(productIndex),
-                new PostgresFullTextSearchEngine(),
-                new OpenSearchProductSearchEngine()
+                new PostgresFullTextSearchEngine(productRepository),
+                new OpenSearchProductSearchEngine(openSearchSearchClient, productRepository)
         ));
 
         assertThrows(IllegalArgumentException.class, () -> service.search("bad-engine", "shoe", 10));
