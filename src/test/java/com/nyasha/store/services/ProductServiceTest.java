@@ -1,6 +1,9 @@
 package com.nyasha.store.services;
 
 import com.nyasha.store.entities.Product;
+import com.nyasha.store.indexing.IndexingEvent;
+import com.nyasha.store.indexing.IndexingEventType;
+import com.nyasha.store.indexing.SearchIndexingPublisher;
 import com.nyasha.store.repositories.ProductRepository;
 import com.nyasha.store.utils.ProductIndex;
 import org.junit.jupiter.api.Test;
@@ -26,6 +29,9 @@ class ProductServiceTest {
 
     @Mock
     private ProductIndex productIndex;
+
+    @Mock
+    private SearchIndexingPublisher indexingPublisher;
 
     @InjectMocks
     private ProductService productService;
@@ -58,11 +64,26 @@ class ProductServiceTest {
         Product product = product(null, "Laptop", "Fast laptop", "SKU-1", 100.0);
         Product saved = product(1L, "Laptop", "Fast laptop", "SKU-1", 100.0);
         when(productRepository.save(product)).thenReturn(saved);
+        when(indexingPublisher.publish(saved, IndexingEventType.UPSERT)).thenReturn(indexingEvent("event-1"));
 
         Product result = productService.createProduct(product);
 
         assertThat(result.getProductId()).isEqualTo(1L);
         verify(productIndex).insert(saved);
+        verify(indexingPublisher).publish(saved, IndexingEventType.UPSERT);
+    }
+
+    @Test
+    void deleteProductRemovesProductAndPublishesDeleteEvent() {
+        Product product = product(1L, "Laptop", "Fast laptop", "SKU-1", 100.0);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(indexingPublisher.publishDelete(1L)).thenReturn(indexingEvent("event-2"));
+
+        productService.deleteProduct(1L);
+
+        verify(productIndex).remove(product);
+        verify(productRepository).delete(product);
+        verify(indexingPublisher).publishDelete(1L);
     }
 
     @Test
@@ -93,5 +114,11 @@ class ProductServiceTest {
         product.setSku(sku);
         product.setBasePrice(basePrice);
         return product;
+    }
+
+    private IndexingEvent indexingEvent(String eventId) {
+        IndexingEvent event = new IndexingEvent();
+        event.setEventId(eventId);
+        return event;
     }
 }
