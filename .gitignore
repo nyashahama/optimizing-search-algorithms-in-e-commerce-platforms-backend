@@ -34,3 +34,6 @@ build/
 
 ### Local brainstorming companion ###
 .superpowers/
+
+# Local planning artifacts (keep implementation notes out of public PRs)
+docs/superpowers/

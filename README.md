@@ -202,12 +202,6 @@ curl -s "http://localhost:9200/_cluster/health?pretty"
 
 If you need to ignore OpenSearch temporarily, benchmarking still proceeds for other engines.
 
-## Design Docs
+## Design Notes
 
-- `docs/superpowers/specs/2026-05-21-search-benchmarking-lab-design.md`
-- `docs/superpowers/plans/2026-05-21-phase-0-stabilize-current-backend.md`
-- `docs/superpowers/plans/2026-05-21-phase-1-search-abstraction.md`
-- `docs/superpowers/plans/2026-05-21-phase-2-infrastructure.md`
-- `docs/superpowers/plans/2026-05-21-phase-3-event-driven-indexing.md`
-- `docs/superpowers/plans/2026-05-21-phase-4-benchmarking.md`
-- `docs/superpowers/plans/2026-05-21-phase-5-verification-and-documentation.md`
+Design and execution notes are maintained locally and intentionally not tracked in this repository.
