@@ -1,6 +1,7 @@
 package com.nyasha.store.repositories;
 
 import com.nyasha.store.entities.Product;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.query.Param;
@@ -11,6 +12,7 @@ import java.util.List;
 public interface ProductRepository extends JpaRepository<Product,Long> {
     List<Product> findByNameContainingIgnoreCase(String name);
     List<Product> findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(String name, String description);
+    List<Product> findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(String name, String description, Pageable pageable);
     List<Product> findBySku(String sku);
 
     @Query("SELECT p FROM Product p JOIN p.categories c WHERE c.categoryId = :categoryId")

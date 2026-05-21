@@ -53,6 +53,12 @@ Expected: Java 21.
 ./mvnw test
 ```
 
+## Search API
+
+- `GET /api/search?q=wireless&engine=in_memory&limit=20` runs a single search engine.
+- `GET /api/search/compare?q=wireless&limit=20` runs all search engines side-by-side.
+- `GET /api/products/search?query=wireless` delegates to the in-memory engine for backward compatibility.
+
 ## Run The API Locally
 
 Set PostgreSQL connection values if your local database differs from the defaults:

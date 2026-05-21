@@ -1,6 +1,7 @@
 package com.nyasha.store.controllers;
 
 import com.nyasha.store.entities.Product;
+import com.nyasha.store.search.ProductSearchService;
 import com.nyasha.store.services.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -9,16 +10,19 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/products")
 public class ProductController {
 
     private final ProductService productService;
+    private final ProductSearchService productSearchService;
 
     @Autowired
-    public ProductController(ProductService productService) {
+    public ProductController(ProductService productService, ProductSearchService productSearchService) {
         this.productService = productService;
+        this.productSearchService = productSearchService;
     }
 
     // Create a product
@@ -59,7 +63,8 @@ public class ProductController {
     // Full-text search
     @GetMapping("/search")
     public ResponseEntity<Set<Product>> searchByText(@RequestParam String query) {
-        return ResponseEntity.ok(productService.searchByText(query));
+        return ResponseEntity.ok(productSearchService.search("in_memory", query, 20).products()
+                .stream().collect(Collectors.toSet()));
     }
 
     // Autocomplete suggestions
