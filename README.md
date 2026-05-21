@@ -75,12 +75,10 @@ Expected: Java 21.
 ```bash
 cp .env.example .env
 docker compose up -d
-SPRING_PROFILES_ACTIVE=docker \
-SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/store_db \
-SPRING_DATASOURCE_USERNAME=postgres \
-SPRING_DATASOURCE_PASSWORD=change-me
-SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
-./mvnw spring-boot:run
+set -a
+source .env
+set +a
+SPRING_PROFILES_ACTIVE=docker ./mvnw spring-boot:run
 ```
 
 ### Without Docker
@@ -121,6 +119,9 @@ Use this sequence for a deterministic end-to-end check:
 ```bash
 cp .env.example .env
 docker compose up -d
+set -a
+source .env
+set +a
 ```
 
 2. Start the API:
@@ -188,9 +189,16 @@ export SPRING_DATASOURCE_PASSWORD=change-me
 
 Then restart the app.
 
+If port `5432` is already in use locally, set `POSTGRES_PORT` and update the JDBC URL before starting Compose:
+
+```bash
+POSTGRES_PORT=55432
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:55432/store_db
+```
+
 ### Kafka consumer/producer errors
 
-If indexing events are not being consumed, verify `KAFKA_BOOTSTRAP_SERVERS` points at a running broker and topic auto-create is enabled (default in Compose).
+If indexing events are not being consumed, verify `SPRING_KAFKA_BOOTSTRAP_SERVERS` points at a running broker and topic auto-create is enabled (default in Compose).
 
 ### OpenSearch failures in search/indexing
 
