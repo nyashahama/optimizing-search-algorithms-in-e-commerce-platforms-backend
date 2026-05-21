@@ -7,4 +7,3 @@ public record IndexingEventMessage(
         String payload
 ) {
 }
-

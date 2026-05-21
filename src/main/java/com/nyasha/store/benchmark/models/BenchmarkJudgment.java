@@ -30,4 +30,3 @@ public class BenchmarkJudgment {
     @Column(nullable = false)
     private Integer relevance;
 }
-

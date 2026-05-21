@@ -4,4 +4,3 @@ public enum IndexingEventType {
     UPSERT,
     DELETE
 }
-

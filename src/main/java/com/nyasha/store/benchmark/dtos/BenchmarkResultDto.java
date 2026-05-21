@@ -18,4 +18,3 @@ public record BenchmarkResultDto(
         String errorMessage
 ) {
 }
-

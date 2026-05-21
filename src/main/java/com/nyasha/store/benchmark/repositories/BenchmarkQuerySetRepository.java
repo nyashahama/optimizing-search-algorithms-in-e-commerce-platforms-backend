@@ -8,4 +8,3 @@ import java.util.Optional;
 public interface BenchmarkQuerySetRepository extends JpaRepository<BenchmarkQuerySet, Long> {
     Optional<BenchmarkQuerySet> findByName(String name);
 }
-

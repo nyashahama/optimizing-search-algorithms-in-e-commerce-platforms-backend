@@ -22,4 +22,3 @@ public class BenchmarkQuery {
     @Column(nullable = false)
     private Integer position;
 }
-

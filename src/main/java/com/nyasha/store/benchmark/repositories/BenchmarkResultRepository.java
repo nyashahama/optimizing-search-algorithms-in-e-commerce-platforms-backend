@@ -9,4 +9,3 @@ import java.util.List;
 public interface BenchmarkResultRepository extends JpaRepository<BenchmarkResult, Long> {
     List<BenchmarkResult> findByRunOrderByQueryTextAscEngineAsc(BenchmarkRun run);
 }
-

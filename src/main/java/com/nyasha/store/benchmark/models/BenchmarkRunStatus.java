@@ -5,4 +5,3 @@ public enum BenchmarkRunStatus {
     COMPLETED,
     FAILED
 }
-

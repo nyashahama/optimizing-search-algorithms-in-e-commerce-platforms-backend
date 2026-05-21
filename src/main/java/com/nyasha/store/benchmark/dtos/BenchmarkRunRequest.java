@@ -5,4 +5,3 @@ public record BenchmarkRunRequest(
         Integer limit
 ) {
 }
-

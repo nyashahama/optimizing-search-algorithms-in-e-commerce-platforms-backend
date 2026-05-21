@@ -12,4 +12,3 @@ public class SearchInfrastructureConfig {
         return new RestTemplate();
     }
 }
-

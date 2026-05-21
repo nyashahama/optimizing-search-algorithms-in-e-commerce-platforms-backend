@@ -9,4 +9,3 @@ import java.util.List;
 public interface BenchmarkJudgmentRepository extends JpaRepository<BenchmarkJudgment, Long> {
     List<BenchmarkJudgment> findByQuerySetAndQueryTextIgnoreCase(BenchmarkQuerySet querySet, String queryText);
 }
-

@@ -32,4 +32,3 @@ public class BenchmarkQuerySet {
         createdAt = LocalDateTime.now();
     }
 }
-

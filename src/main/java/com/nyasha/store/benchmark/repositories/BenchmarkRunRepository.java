@@ -9,4 +9,3 @@ import java.util.List;
 public interface BenchmarkRunRepository extends JpaRepository<BenchmarkRun, Long> {
     List<BenchmarkRun> findByStatusOrderByStartedAtDesc(BenchmarkRunStatus status);
 }
-

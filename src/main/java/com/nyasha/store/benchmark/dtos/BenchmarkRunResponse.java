@@ -6,4 +6,3 @@ public record BenchmarkRunResponse(
         int queryCount
 ) {
 }
-

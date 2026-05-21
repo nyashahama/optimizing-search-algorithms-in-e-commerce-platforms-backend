@@ -42,4 +42,3 @@ public class BenchmarkResult {
         return errorMessage == null;
     }
 }
-
