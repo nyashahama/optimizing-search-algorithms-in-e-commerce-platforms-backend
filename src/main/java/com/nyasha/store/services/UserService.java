@@ -11,6 +11,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -18,17 +19,14 @@ public class UserService {
 
     private static final Logger logger = LoggerFactory.getLogger(UserService.class);
 
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    // Combined in-memory index.
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
     private final UserIndex userIndex;
 
     @Autowired
-    public UserService(UserIndex userIndex){
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, UserIndex userIndex) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
         this.userIndex = userIndex;
     }
 
@@ -40,21 +38,25 @@ public class UserService {
                 userIndex.insert(user);
             }
             logger.info("User index initialized with {} users", users.size());
-        }catch (Exception e){
-            logger.error("Error initializing user index: {}", e.getMessage(),e);
-            throw new RuntimeException("User initialization failed: "+e.getMessage());
+        } catch (Exception e) {
+            logger.error("Error initializing user index: {}", e.getMessage(), e);
+            throw new RuntimeException("User initialization failed: " + e.getMessage());
         }
     }
 
-    // Create a new user, save to repository, and update the index.
     public User createUser(User user) {
         try {
+            requireUserPayload(user);
+            if (userRepository.findByEmail(user.getEmail()).isPresent()) {
+                throw new RuntimeException("Email already in use");
+            }
+
             user.setHashedPassword(passwordEncoder.encode(user.getHashedPassword()));
             User savedUser = userRepository.save(user);
             userIndex.insert(savedUser);
             logger.info("Created user with id {}", savedUser.getUserId());
             return savedUser;
-        }catch (Exception e){
+        } catch (Exception e) {
             logger.error("Error creating user: {}", e.getMessage(), e);
             throw new RuntimeException("User creation failed: " + e.getMessage());
         }
@@ -62,16 +64,16 @@ public class UserService {
 
     /**
      * Authenticate user by email and password.
-     * @param email the user email.
-     * @param password the plain text password.
-     * @return the authenticated user, if credentials are valid.
      */
     public Optional<User> authenticateUser(String email, String password) {
         try {
+            if (email == null || email.isBlank() || password == null || password.isBlank()) {
+                return Optional.empty();
+            }
             Optional<User> optionalUser = userRepository.findByEmail(email);
             if (optionalUser.isPresent()) {
                 User user = optionalUser.get();
-                if (passwordEncoder.matches(password, user.getHashedPassword())) {
+                if (user.getHashedPassword() != null && passwordEncoder.matches(password, user.getHashedPassword())) {
                     logger.info("User authenticated with id {}", user.getUserId());
                     return Optional.of(user);
                 }
@@ -79,29 +81,31 @@ public class UserService {
             logger.warn("Authentication failed for email: {}", email);
             return Optional.empty();
         } catch (Exception e) {
-            logger.error("Error during authentication for email {}: {}",email, e.getMessage(),e);
+            logger.error("Error during authentication for email {}: {}", email, e.getMessage(), e);
             return Optional.empty();
         }
     }
 
-    // Update an existing user.
-    // Capture old name/email values before updating, then update the index.
     public User updateUser(Long id, User userDetails) {
         try {
             User user = userRepository.findById(id)
                     .orElseThrow(() -> new RuntimeException("User not found"));
+            requireUserPayloadForUpdate(userDetails);
             String oldName = user.getName();
             String oldEmail = user.getEmail();
 
-            // Update user details.
+            if (!Objects.equals(user.getEmail(), userDetails.getEmail())
+                    && userRepository.findByEmail(userDetails.getEmail()).isPresent()) {
+                throw new RuntimeException("Email already in use");
+            }
+
             user.setName(userDetails.getName());
             user.setEmail(userDetails.getEmail());
             if (userDetails.getHashedPassword() != null && !userDetails.getHashedPassword().isEmpty()) {
                 user.setHashedPassword(passwordEncoder.encode(userDetails.getHashedPassword()));
             }
-            User updatedUser = userRepository.save(user);
 
-            // Update the in-memory index.
+            User updatedUser = userRepository.save(user);
             userIndex.update(oldName, oldEmail, updatedUser);
             logger.info("Updated user with id {}", updatedUser.getUserId());
             return updatedUser;
@@ -111,23 +115,19 @@ public class UserService {
         }
     }
 
-    // Read a user by ID.
     public Optional<User> getUserById(Long id) {
         return userRepository.findById(id);
     }
 
-    // Read all users.
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }
 
-    // Delete a user.
     public void deleteUser(Long id) {
         try {
             Optional<User> optionalUser = userRepository.findById(id);
             if (optionalUser.isPresent()) {
                 User user = optionalUser.get();
-                // Remove from index first.
                 userIndex.remove(user);
                 userRepository.deleteById(id);
                 logger.info("Deleted user with id {}", id);
@@ -136,11 +136,10 @@ public class UserService {
             }
         } catch (Exception e) {
             logger.error("Error deleting user with id {}: {}", id, e.getMessage(), e);
-            throw new RuntimeException("Deleting user failed: "+e.getMessage());
+            throw new RuntimeException("Deleting user failed: " + e.getMessage());
         }
     }
 
-    // Search users using the combined index.
     public List<User> searchUsers(String searchTerm) {
         try {
             logger.info("Searching for users with search term: {}", searchTerm);
@@ -152,187 +151,31 @@ public class UserService {
             throw new RuntimeException("Search failed: " + e.getMessage());
         }
     }
+
+    private void requireUserPayload(User user) {
+        if (user == null) {
+            throw new RuntimeException("User payload is required");
+        }
+        if (user.getName() == null || user.getName().isBlank()) {
+            throw new RuntimeException("User name is required");
+        }
+        if (user.getEmail() == null || user.getEmail().isBlank()) {
+            throw new RuntimeException("User email is required");
+        }
+        if (user.getHashedPassword() == null || user.getHashedPassword().isBlank()) {
+            throw new RuntimeException("User password is required");
+        }
+    }
+
+    private void requireUserPayloadForUpdate(User user) {
+        if (user == null) {
+            throw new RuntimeException("User payload is required");
+        }
+        if (user.getName() == null || user.getName().isBlank()) {
+            throw new RuntimeException("User name is required");
+        }
+        if (user.getEmail() == null || user.getEmail().isBlank()) {
+            throw new RuntimeException("User email is required");
+        }
+    }
 }
-
-
-
-
-/*package com.nyasha.store.sevices;
-
-import com.nyasha.store.entities.User;
-import com.nyasha.store.repositories.UserRepository;
-import com.nyasha.store.utils.UserIndex;
-import jakarta.annotation.PostConstruct;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.Optional;
-
-@Service
-public class UserService {
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    // Using the best-practice, self-balancing index implementation.
-    private UserIndex userIndex = new UserIndex();
-
-    @PostConstruct
-    public void initializeIndex() {
-        List<User> users = userRepository.findAll();
-        for (User user : users) {
-            userIndex.insert(user);
-        }
-    }
-
-    // Create a new user and add it to the index.
-    public User createUser(User user) {
-        user.setHashedPassword(passwordEncoder.encode(user.getHashedPassword()));
-        User savedUser = userRepository.save(user);
-        userIndex.insert(savedUser);
-        return savedUser;
-    }
-
-    // Update an existing user.
-    // NOTE: If updating fields that are indexed (name or email), you should also update the index.
-    public User updateUser(Long id, User userDetails) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        user.setName(userDetails.getName());
-        user.setEmail(userDetails.getEmail());
-        // Only hash and update the password if a new one is provided.
-        if (userDetails.getHashedPassword() != null && !userDetails.getHashedPassword().isEmpty()) {
-            user.setHashedPassword(passwordEncoder.encode(userDetails.getHashedPassword()));
-        }
-        User updatedUser = userRepository.save(user);
-        // Optionally update the index here if your use-case requires it.
-        return updatedUser;
-    }
-
-    // Read a user by ID.
-    public Optional<User> getUserById(Long id) {
-        return userRepository.findById(id);
-    }
-
-    // Read all users.
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
-    }
-
-    // Delete a user.
-    // NOTE: You may want to also remove the user from the index.
-    public void deleteUser(Long id) {
-        userRepository.deleteById(id);
-    }
-
-    // Search users using the self-balancing UserIndex for efficient prefix search.
-    public List<User> searchUsers(String searchTerm) {
-        try {
-            System.out.println("Searching for: " + searchTerm);
-            List<User> results = userIndex.search(searchTerm.toLowerCase());
-            System.out.println("Found results: " + results.size());
-            return results;
-        } catch (Exception e) {
-            System.err.println("Search error: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException("Search failed: " + e.getMessage());
-        }
-    }
-}*/
-
-//incase i encounter errors:
-/*package com.nyasha.store.sevices;
-
-import com.nyasha.store.entities.User;
-import com.nyasha.store.repositories.UserRepository;
-import com.nyasha.store.utils.UserBST;
-import com.nyasha.store.utils.UserIndex;
-import jakarta.annotation.PostConstruct;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.Optional;
-
-@Service
-public class UserService {
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    private UserBST userBST = new UserBST();
-
-    private UserIndex userIndex;
-
-    @PostConstruct
-    public void initializeBST(){
-        List<User> users = userRepository.findAll();
-        for(User user:users){
-            userBST.insert(user);
-        }
-    }
-
-    // Create a new user
-    public User createUser(User user) {
-        user.setHashedPassword(passwordEncoder.encode(user.getHashedPassword()));
-        User savedUser = userRepository.save(user);
-        userBST.insert(savedUser);
-        return savedUser;
-    }
-
-    // Update an existing user
-    public User updateUser(Long id, User userDetails) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        user.setName(userDetails.getName());
-        user.setEmail(userDetails.getEmail());
-        // Only hash and update the password if a new one is provided
-        if (userDetails.getHashedPassword() != null && !userDetails.getHashedPassword().isEmpty()) {
-            user.setHashedPassword(passwordEncoder.encode(userDetails.getHashedPassword()));
-        }
-        return userRepository.save(user);
-    }
-
-    // Read a user by ID
-    public Optional<User> getUserById(Long id) {
-        return userRepository.findById(id);
-    }
-
-    // Read all users
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
-    }
-
-    // Delete a user
-    public void deleteUser(Long id) {
-        userRepository.deleteById(id);
-    }
-
-    /*public List<User> searchUsers(String searchTerm) {
-        return userRepository.findByNameContainingIgnoreCaseOrEmailContainingIgnoreCase(searchTerm, searchTerm);
-    }*/
-
-   /*public List<User> searchUsers(String searchTerm) {
-        try {
-            System.out.println("Searching for: " + searchTerm);
-            List<User> results = userBST.search(searchTerm.toLowerCase());
-            System.out.println("Found results: " + results.size());
-            return results;
-        } catch (Exception e) {
-            System.err.println("Search error: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException("Search failed: " + e.getMessage());
-        }
-    }
-
-
-}*/

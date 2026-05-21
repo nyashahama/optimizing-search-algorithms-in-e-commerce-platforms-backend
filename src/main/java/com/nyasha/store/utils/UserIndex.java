@@ -39,6 +39,17 @@ public class UserIndex {
      * Inserts a user into both the fast (ConcurrentHashMap) and sorted (ConcurrentSkipListMap) indexes.
      */
     public void insert(User user) {
+        if (user == null) {
+            return;
+        }
+
+        if (user.getName() == null) {
+            return;
+        }
+        if (user.getEmail() == null) {
+            return;
+        }
+
         String nameKey = user.getName().toLowerCase();
         String emailKey = user.getEmail().toLowerCase();
         try {
@@ -58,6 +69,14 @@ public class UserIndex {
      * Removes a user from both the fast and sorted indexes.
      */
     public void remove(User user) {
+        if (user == null) {
+            return;
+        }
+
+        if (user.getName() == null || user.getEmail() == null) {
+            return;
+        }
+
         String nameKey = user.getName().toLowerCase();
         String emailKey = user.getEmail().toLowerCase();
         try {
@@ -82,6 +101,15 @@ public class UserIndex {
      * @param updatedUser The user object after update.
      */
     public void update(String oldName, String oldEmail, User updatedUser) {
+        if (updatedUser == null) {
+            return;
+        }
+
+        if (oldName == null || oldEmail == null) {
+            insert(updatedUser);
+            return;
+        }
+
         String oldNameKey = oldName.toLowerCase();
         String oldEmailKey = oldEmail.toLowerCase();
         try {
@@ -106,6 +134,10 @@ public class UserIndex {
      * Uses the sorted indexes (ConcurrentSkipListMap) for efficient retrieval.
      */
     public List<User> search(String searchTerm) {
+        if (searchTerm == null || searchTerm.isBlank()) {
+            return Collections.emptyList();
+        }
+
         String prefix = searchTerm.toLowerCase();
         Set<User> results = new HashSet<>();
         try {
@@ -127,7 +159,7 @@ public class UserIndex {
         List<User> list = index.get(key);
         if (list != null) {
             synchronized (list) {
-                list.remove(user);
+                list.removeIf(candidate -> sameUser(candidate, user));
                 if (list.isEmpty()) {
                     index.remove(key, list);
                 }
@@ -151,5 +183,12 @@ public class UserIndex {
             }
         }
         return matches;
+    }
+
+    private boolean sameUser(User a, User b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        return Objects.equals(a.getUserId(), b.getUserId()) || a == b;
     }
 }

@@ -31,6 +31,26 @@ public class ProductIndex {
 
     private final Object indexLock = new Object();
 
+    private static final String UNDEFINED_TOKEN = "__undefined__";
+
+    public void rebuild(List<Product> products) {
+        synchronized (indexLock) {
+            fastIndexByName.clear();
+            fastIndexBySku.clear();
+            sortedIndexByName.clear();
+            sortedIndexBySku.clear();
+            invertedIndex.clear();
+            categoryIndex.clear();
+
+            if (products == null) {
+                return;
+            }
+            for (Product product : products) {
+                insert(product);
+            }
+        }
+    }
+
     /**
      * Helper method to get or create a synchronized list.
      */
@@ -42,9 +62,12 @@ public class ProductIndex {
      * Inserts a product into all indexes.
      */
     public void insert(Product product) {
-        // Index by name and SKU
-        String nameKey = product.getName().toLowerCase();
-        String skuKey = product.getSku().toLowerCase();
+        if (product == null) {
+            return;
+        }
+
+        String nameKey = normalizeKey(product.getName());
+        String skuKey = normalizeKey(product.getSku());
         try {
             synchronized (indexLock) {
                 getOrCreateList(fastIndexByName, nameKey).add(product);
@@ -53,9 +76,13 @@ public class ProductIndex {
                 getOrCreateList(sortedIndexBySku, skuKey).add(product);
 
                 // Index categories
-                product.getCategories().forEach(category ->
-                        getOrCreateList(categoryIndex, category.getCategoryId().toString()).add(product)
-                );
+                if (product.getCategories() != null) {
+                    product.getCategories().forEach(category -> {
+                        if (category != null && category.getCategoryId() != null) {
+                            getOrCreateList(categoryIndex, category.getCategoryId().toString()).add(product);
+                        }
+                    });
+                }
 
                 // Build inverted index for full-text search
                 indexTextFields(product);
@@ -71,8 +98,12 @@ public class ProductIndex {
      * Removes a product from all indexes.
      */
     public void remove(Product product) {
-        String nameKey = product.getName().toLowerCase();
-        String skuKey = product.getSku().toLowerCase();
+        if (product == null) {
+            return;
+        }
+
+        String nameKey = normalizeKey(product.getName());
+        String skuKey = normalizeKey(product.getSku());
         try {
             synchronized (indexLock) {
                 removeFromIndex(fastIndexByName, nameKey, product);
@@ -81,9 +112,13 @@ public class ProductIndex {
                 removeFromIndex(sortedIndexBySku, skuKey, product);
 
                 // Remove from category index
-                product.getCategories().forEach(category ->
-                        removeFromIndex(categoryIndex, category.getCategoryId().toString(), product)
-                );
+                if (product.getCategories() != null) {
+                    product.getCategories().forEach(category -> {
+                        if (category != null && category.getCategoryId() != null) {
+                            removeFromIndex(categoryIndex, category.getCategoryId().toString(), product);
+                        }
+                    });
+                }
 
                 // Remove from inverted index
                 removeFromInvertedIndex(product);
@@ -113,10 +148,16 @@ public class ProductIndex {
      * Full-text search across product names and descriptions.
      */
     public Set<Product> searchByText(String query) {
-        Set<Product> results = new HashSet<>();
-        String[] terms = query.toLowerCase().split("\\W+");
-        for (String term : terms) {
+        Set<Product> results = new LinkedHashSet<>();
+        if (!hasQueryTerms(query)) {
+            return results;
+        }
+
+        for (String term : tokenize(query)) {
             Set<Product> matches = invertedIndex.getOrDefault(term, Collections.emptySet());
+            if (matches == null || matches.isEmpty()) {
+                continue;
+            }
             results.addAll(matches);
         }
         logger.debug("Full-text search for '{}' returned {} results", query, results.size());
@@ -127,6 +168,10 @@ public class ProductIndex {
      * Prefix-based search for autocompletion.
      */
     public List<Product> searchByPrefix(String prefix) {
+        if (prefix == null || prefix.isBlank()) {
+            return Collections.emptyList();
+        }
+
         String normalizedPrefix = prefix.toLowerCase();
         Set<Product> results = new HashSet<>();
         results.addAll(searchByPrefix(sortedIndexByName, normalizedPrefix));
@@ -139,15 +184,18 @@ public class ProductIndex {
      * Search products by category ID.
      */
     public List<Product> searchByCategory(String categoryId) {
-        return categoryIndex.getOrDefault(categoryId, Collections.emptyList());
+        if (categoryId == null || categoryId.isBlank()) {
+            return Collections.emptyList();
+        }
+
+        return new ArrayList<>(categoryIndex.getOrDefault(categoryId, Collections.emptyList()));
     }
 
     // --- Helper Methods ---
     private void indexTextFields(Product product) {
         String[] textFields = { product.getName(), product.getDescription() };
         for (String text : textFields) {
-            String[] terms = text.toLowerCase().split("\\W+");
-            for (String term : terms) {
+            for (String term : tokenize(text)) {
                 invertedIndex.computeIfAbsent(term, k -> ConcurrentHashMap.newKeySet())
                         .add(product);
             }
@@ -157,11 +205,10 @@ public class ProductIndex {
     private void removeFromInvertedIndex(Product product) {
         String[] textFields = { product.getName(), product.getDescription() };
         for (String text : textFields) {
-            String[] terms = text.toLowerCase().split("\\W+");
-            for (String term : terms) {
+            for (String term : tokenize(text)) {
                 Set<Product> products = invertedIndex.get(term);
                 if (products != null) {
-                    products.remove(product);
+                    products.removeIf(candidate -> sameProduct(candidate, product));
                     if (products.isEmpty()) {
                         invertedIndex.remove(term);
                     }
@@ -174,7 +221,7 @@ public class ProductIndex {
         List<Product> list = map.get(key);
         if (list != null) {
             synchronized (list) {
-                list.remove(product);
+                list.removeIf(candidate -> sameProduct(candidate, product));
                 if (list.isEmpty()) {
                     map.remove(key, list);
                 }
@@ -193,5 +240,35 @@ public class ProductIndex {
             }
         }
         return matches;
+    }
+
+    private String normalizeKey(String value) {
+        return value == null || value.isBlank() ? UNDEFINED_TOKEN : value.toLowerCase();
+    }
+
+    private Set<String> tokenize(String text) {
+        if (text == null || text.isBlank()) {
+            return Collections.emptySet();
+        }
+
+        String[] tokens = text.toLowerCase().split("\\W+");
+        Set<String> result = new HashSet<>();
+        for (String token : tokens) {
+            if (token != null && !token.isBlank()) {
+                result.add(token);
+            }
+        }
+        return result;
+    }
+
+    private boolean hasQueryTerms(String query) {
+        return query != null && !tokenize(query).isEmpty();
+    }
+
+    private boolean sameProduct(Product a, Product b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        return Objects.equals(a.getProductId(), b.getProductId()) || a == b;
     }
 }
