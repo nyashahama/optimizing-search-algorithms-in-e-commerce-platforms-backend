@@ -78,6 +78,40 @@ services:
       timeout: 5s
       retries: 12
 
+  app:
+    build: .
+    container_name: osa-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-store_db}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      OPENSEARCH_URL: http://opensearch:9200
+      SECURITY_BOOTSTRAP_ADMIN_ENABLED: ${SECURITY_BOOTSTRAP_ADMIN_ENABLED:-true}
+      SECURITY_BOOTSTRAP_ADMIN_EMAIL: ${SECURITY_BOOTSTRAP_ADMIN_EMAIL:-admin@localhost}
+      SECURITY_BOOTSTRAP_ADMIN_PASSWORD: ${SECURITY_BOOTSTRAP_ADMIN_PASSWORD:-}
+      SECURITY_BOOTSTRAP_ADMIN_NAME: ${SECURITY_BOOTSTRAP_ADMIN_NAME:-Admin User}
+      SECURITY_RATE_LIMIT_ENABLED: ${SECURITY_RATE_LIMIT_ENABLED:-true}
+      SECURITY_RATE_LIMIT_REQUESTS_PER_MINUTE: ${SECURITY_RATE_LIMIT_REQUESTS_PER_MINUTE:-120}
+      SECURITY_RATE_LIMIT_WINDOW_MS: ${SECURITY_RATE_LIMIT_WINDOW_MS:-60000}
+    volumes:
+      - ./reports:/app/reports
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+
 volumes:
   postgres_data:
   zookeeper_data:

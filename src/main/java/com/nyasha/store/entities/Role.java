@@ -4,7 +4,9 @@ import jakarta.persistence.*;
 import lombok.Data;
 
 @Entity
-@Table(name = "roles")
+@Table(name = "roles", uniqueConstraints = {
+        @UniqueConstraint(name = "uq_role_name", columnNames = "name")
+})
 @Data
 public class Role {
     @Id
@@ -12,4 +14,11 @@ public class Role {
     private Long roleId;
 
     private String name;
+
+    public Role() {
+    }
+
+    public Role(String name) {
+        this.name = name;
+    }
 }

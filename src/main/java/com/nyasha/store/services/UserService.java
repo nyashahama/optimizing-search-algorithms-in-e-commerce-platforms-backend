@@ -1,6 +1,7 @@
 package com.nyasha.store.services;
 
 import com.nyasha.store.entities.User;
+import com.nyasha.store.repositories.RoleRepository;
 import com.nyasha.store.repositories.UserRepository;
 import com.nyasha.store.utils.UserIndex;
 import jakarta.annotation.PostConstruct;
@@ -10,9 +11,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.nyasha.store.entities.Role;
+import com.nyasha.store.security.DatabaseUserDetailsService;
+
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class UserService {
@@ -22,12 +28,22 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserIndex userIndex;
+    private final RoleRepository roleRepository;
+    private final DatabaseUserDetailsService databaseUserDetailsService;
 
     @Autowired
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, UserIndex userIndex) {
+    public UserService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            UserIndex userIndex,
+            RoleRepository roleRepository,
+            DatabaseUserDetailsService databaseUserDetailsService
+    ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.userIndex = userIndex;
+        this.roleRepository = roleRepository;
+        this.databaseUserDetailsService = databaseUserDetailsService;
     }
 
     @PostConstruct
@@ -51,6 +67,7 @@ public class UserService {
                 throw new RuntimeException("Email already in use");
             }
 
+            assignDefaultRoles(user);
             user.setHashedPassword(passwordEncoder.encode(user.getHashedPassword()));
             User savedUser = userRepository.save(user);
             userIndex.insert(savedUser);
@@ -119,6 +136,10 @@ public class UserService {
         return userRepository.findById(id);
     }
 
+    public Role findRole(String roleName) {
+        return databaseUserDetailsService.roleByName(roleName);
+    }
+
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }
@@ -177,5 +198,29 @@ public class UserService {
         if (user.getEmail() == null || user.getEmail().isBlank()) {
             throw new RuntimeException("User email is required");
         }
+    }
+
+    private void assignDefaultRoles(User user) {
+        if (user == null) {
+            return;
+        }
+
+        if (user.getRoles() == null) {
+            user.setRoles(new HashSet<>());
+        }
+
+        if (!user.getRoles().isEmpty()) {
+            return;
+        }
+
+        Role userRole = roleRepository.findByNameIgnoreCase("USER")
+                .orElseGet(() -> {
+                    Role role = new Role();
+                    role.setName("USER");
+                    return roleRepository.save(role);
+                });
+        Set<Role> roles = new HashSet<>();
+        roles.add(userRole);
+        user.setRoles(roles);
     }
 }

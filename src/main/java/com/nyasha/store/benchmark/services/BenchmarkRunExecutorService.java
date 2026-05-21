@@ -2,7 +2,6 @@ package com.nyasha.store.benchmark.services;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nyasha.store.benchmark.dtos.BenchmarkResultDto;
-import com.nyasha.store.benchmark.dtos.BenchmarkRunResponse;
 import com.nyasha.store.benchmark.dtos.BenchmarkRunSummaryDto;
 import com.nyasha.store.benchmark.models.BenchmarkJudgment;
 import com.nyasha.store.benchmark.models.BenchmarkQuery;
@@ -22,11 +21,12 @@ import com.nyasha.store.search.SearchResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -42,9 +42,9 @@ import java.util.stream.Collectors;
 import static java.util.Comparator.comparing;
 
 @Service
-public class BenchmarkService {
+public class BenchmarkRunExecutorService {
 
-    private static final Logger logger = LoggerFactory.getLogger(BenchmarkService.class);
+    private static final Logger logger = LoggerFactory.getLogger(BenchmarkRunExecutorService.class);
     private static final int DEFAULT_QUERY_LIMIT = 20;
     private static final int METRIC_K = 10;
     private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmssSSS");
@@ -53,18 +53,16 @@ public class BenchmarkService {
     private final BenchmarkJudgmentRepository judgmentRepository;
     private final BenchmarkRunRepository runRepository;
     private final BenchmarkResultRepository resultRepository;
-    private final BenchmarkRunExecutorService executorService;
     private final ProductSearchService productSearchService;
     private final IndexingEventRepository indexingEventRepository;
     private final ObjectMapper objectMapper;
     private final String reportDirectoryBase;
 
-    public BenchmarkService(
+    public BenchmarkRunExecutorService(
             BenchmarkQuerySetRepository querySetRepository,
             BenchmarkJudgmentRepository judgmentRepository,
             BenchmarkRunRepository runRepository,
             BenchmarkResultRepository resultRepository,
-            BenchmarkRunExecutorService executorService,
             ProductSearchService productSearchService,
             IndexingEventRepository indexingEventRepository,
             ObjectMapper objectMapper,
@@ -74,46 +72,67 @@ public class BenchmarkService {
         this.judgmentRepository = judgmentRepository;
         this.runRepository = runRepository;
         this.resultRepository = resultRepository;
-        this.executorService = executorService;
         this.productSearchService = productSearchService;
         this.indexingEventRepository = indexingEventRepository;
         this.objectMapper = objectMapper;
         this.reportDirectoryBase = reportDirectoryBase;
     }
 
-    public BenchmarkRunResponse startRun(Long querySetId, Integer limit) {
-        BenchmarkQuerySet querySet = resolveQuerySet(querySetId);
+    @Async("benchmarkTaskExecutor")
+    @Transactional
+    public void runAsync(Long runId, Long querySetId, Integer limit) {
+        if (runId == null || querySetId == null) {
+            throw new IllegalArgumentException("Benchmark run id and query set id are required");
+        }
+
+        BenchmarkRun run = runRepository.findById(runId)
+                .orElseThrow(() -> new IllegalArgumentException("Benchmark run not found"));
+        BenchmarkQuerySet querySet = querySetRepository.findById(querySetId)
+                .orElseThrow(() -> new IllegalArgumentException("Query set not found"));
 
         int normalizedLimit = limit == null || limit <= 0 ? DEFAULT_QUERY_LIMIT : Math.min(limit, 100);
         List<BenchmarkQuery> sortedQueries = querySet.getQueries().stream()
                 .sorted(comparing(BenchmarkQuery::getPosition))
                 .toList();
+        long startedAtNanos = System.nanoTime();
+        List<Long> supportedLatencies = new ArrayList<>();
 
-        BenchmarkRun run = runRepository.save(createRun(querySet, sortedQueries));
+        try {
+            run.setStatus(BenchmarkRunStatus.RUNNING);
+            run.setStartedAt(run.getStartedAt() == null ? LocalDateTime.now() : run.getStartedAt());
+            runRepository.save(run);
 
-        executorService.runAsync(run.getId(), querySet.getId(), normalizedLimit);
+            for (BenchmarkQuery query : sortedQueries) {
+                String queryText = query.getQueryText();
+                for (SearchEngineType engine : SearchEngineType.values()) {
+                    SearchResult result = productSearchService.search(engine.canonical(), queryText, normalizedLimit);
+                    BenchmarkResult benchmarkResult = mapResult(run, queryText, result, engine);
+                    attachRelevanceMetrics(benchmarkResult, querySet, queryText);
+                    resultRepository.save(benchmarkResult);
+                    if (result.supported()) {
+                        supportedLatencies.add(result.elapsedMs());
+                    }
+                }
+            }
 
-        return new BenchmarkRunResponse(run.getId(), run.getStatus().name(), sortedQueries.size());
-    }
+            run.setStatus(BenchmarkRunStatus.COMPLETED);
+            run.setCompletedAt(LocalDateTime.now());
+            run.setDurationMs(toMs(System.nanoTime() - startedAtNanos));
+            run.setThroughputQueriesPerSecond(computeThroughput(run, sortedQueries.size()));
+            applyLatencyMetrics(run, supportedLatencies);
+            applyFreshnessMetrics(run);
+            run.setReportDirectory(resolveReportDirectory(run).toString());
+            run = runRepository.save(run);
 
-    private BenchmarkQuerySet resolveQuerySet(Long querySetId) {
-        if (querySetId == null) {
-            return querySetRepository.findByName("electronics-basic")
-                    .orElseGet(() -> querySetRepository.findAll().stream().findFirst()
-                            .orElseThrow(() -> new IllegalArgumentException("No query sets available")));
+            persistArtifacts(run);
+        } catch (Exception e) {
+            run.setStatus(BenchmarkRunStatus.FAILED);
+            run.setCompletedAt(LocalDateTime.now());
+            run.setDurationMs(toMs(System.nanoTime() - startedAtNanos));
+            runRepository.save(run);
+            logger.error("Benchmark run {} failed", run.getId(), e);
+            throw e;
         }
-
-        return querySetRepository.findById(querySetId)
-                .orElseThrow(() -> new IllegalArgumentException("Query set not found"));
-    }
-
-    private BenchmarkRun createRun(BenchmarkQuerySet querySet, List<BenchmarkQuery> sortedQueries) {
-        BenchmarkRun run = new BenchmarkRun();
-        run.setQuerySet(querySet);
-        run.setStatus(BenchmarkRunStatus.QUEUED);
-        run.setTotalQueries(sortedQueries.size());
-        run.setTotalEngines(SearchEngineType.values().length);
-        return run;
     }
 
     private BenchmarkResult mapResult(BenchmarkRun run, String queryText, SearchResult result, SearchEngineType engine) {
@@ -180,159 +199,6 @@ public class BenchmarkService {
                 .toList();
     }
 
-    public BenchmarkRunSummaryDto getRun(Long runId) {
-        return runRepository.findById(runId)
-                .map(run -> new BenchmarkRunSummaryDto(
-                        run.getId(),
-                        run.getStatus(),
-                        run.getQuerySet().getName(),
-                        run.getStartedAt(),
-                        run.getCompletedAt(),
-                        run.getTotalQueries(),
-                        run.getTotalEngines(),
-                        String.format("/api/benchmarks/runs/%d/report.md", run.getId()),
-                        String.format("/api/benchmarks/runs/%d/report.json", run.getId()),
-                        String.format("/api/benchmarks/runs/%d/latency.csv", run.getId()),
-                        String.format("/api/benchmarks/runs/%d/relevance.csv", run.getId()),
-                        run.getReportDirectory(),
-                        run.getDurationMs(),
-                        run.getThroughputQueriesPerSecond(),
-                        run.getLatencyMinMs(),
-                        run.getLatencyP50Ms(),
-                        run.getLatencyP95Ms(),
-                        run.getLatencyP99Ms(),
-                        run.getLatencyAvgMs(),
-                        run.getFreshnessP50Ms(),
-                        run.getFreshnessP95Ms(),
-                        run.getFreshnessP99Ms(),
-                        run.getFreshnessAvgMs()
-                ))
-                .orElseThrow(() -> new IllegalArgumentException("Benchmark run not found"));
-    }
-
-    public List<BenchmarkResultDto> getResults(Long runId) {
-        BenchmarkRun run = runRepository.findById(runId)
-                .orElseThrow(() -> new IllegalArgumentException("Benchmark run not found"));
-
-        return resultRepository.findByRunOrderByQueryTextAscEngineAsc(run).stream()
-                .map(result -> new BenchmarkResultDto(
-                        result.getId(),
-                        result.getQueryText(),
-                        result.getEngine(),
-                        result.getLatencyMs() == null ? 0L : result.getLatencyMs(),
-                        result.getResultCount() == null ? 0 : result.getResultCount(),
-                        result.getReturnedCount() == null ? 0 : result.getReturnedCount(),
-                        result.getTopResultProductIds(),
-                        result.isSupported(),
-                        result.getPrecisionAtK(),
-                        result.getRecallAtK(),
-                        result.getMrrAtK(),
-                        result.getNdcgAtK(),
-                        result.getErrorMessage()
-                ))
-                .toList();
-    }
-
-    public String buildReportMarkdown(Long runId) {
-        BenchmarkRunSummaryDto summary = getRun(runId);
-        List<BenchmarkResultDto> results = getResults(runId);
-
-        double avgLatency = results.stream()
-                .filter(BenchmarkResultDto::supported)
-                .mapToLong(BenchmarkResultDto::latencyMs)
-                .average()
-                .orElse(0.0);
-
-        StringBuilder builder = new StringBuilder();
-        builder.append("# Benchmark Report\n\n");
-        builder.append("Run ID: ").append(runId).append("\n");
-        builder.append("Query Set: ").append(summary.querySetName()).append("\n");
-        builder.append("Status: ").append(summary.status()).append("\n");
-        builder.append("Started At: ").append(summary.startedAt()).append("\n");
-        builder.append("Completed At: ").append(summary.completedAt()).append("\n");
-        builder.append("DurationMs: ").append(summary.durationMs() == null ? 0L : summary.durationMs()).append("\n");
-        builder.append("Throughput (queries/sec): ")
-                .append(summary.throughputQueriesPerSecond() == null ? 0.0d : String.format("%.2f", summary.throughputQueriesPerSecond()))
-                .append("\n");
-        builder.append("Latency p50/p95/p99 (ms): ")
-                .append(summary.latencyP50Ms()).append(" / ")
-                .append(summary.latencyP95Ms()).append(" / ")
-                .append(summary.latencyP99Ms()).append("\n");
-        builder.append("Freshness p50/p95/p99 (ms): ")
-                .append(summary.freshnessP50Ms()).append(" / ")
-                .append(summary.freshnessP95Ms()).append(" / ")
-                .append(summary.freshnessP99Ms()).append("\n");
-        builder.append("Average Latency: ").append(String.format("%.2f ms", avgLatency)).append("\n\n");
-
-        builder.append("| Query | Engine | LatencyMs | ResultCount | Precision@10 | Recall@10 | MRR@10 | nDCG@10 | Error |\n");
-        builder.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n");
-
-        for (BenchmarkResultDto result : results) {
-            builder.append("| ").append(escape(result.queryText())).append(" |")
-                    .append(" ").append(result.engine()).append(" |")
-                    .append(" ").append(result.latencyMs()).append(" |")
-                    .append(" ").append(result.resultCount()).append(" |")
-                    .append(" ").append(formatMetric(result.precisionAtK())).append(" |")
-                    .append(" ").append(formatMetric(result.recallAtK())).append(" |")
-                    .append(" ").append(formatMetric(result.mrrAtK())).append(" |")
-                    .append(" ").append(formatMetric(result.ndcgAtK())).append(" |")
-                    .append(" ").append(result.errorMessage() == null ? "" : result.errorMessage().replace("|", "\\|")).append(" |\n");
-        }
-
-        return builder.toString();
-    }
-
-    public String buildReportJson(Long runId) {
-        BenchmarkRunSummaryDto summary = getRun(runId);
-        List<BenchmarkResultDto> results = getResults(runId);
-
-        try {
-            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(new BenchmarkReportPayload(summary, results));
-        } catch (Exception e) {
-            throw new UncheckedIOException(new IOException("Failed to build benchmark JSON report", e));
-        }
-    }
-
-    public String buildLatencyCsv(Long runId) {
-        List<BenchmarkResultDto> results = getResults(runId);
-
-        StringBuilder builder = new StringBuilder();
-        builder.append("queryText,engine,latencyMs,resultCount,returnedCount,errorMessage\n");
-        for (BenchmarkResultDto result : results) {
-            builder.append(escapeCsv(result.queryText())).append(',')
-                    .append(result.engine()).append(',')
-                    .append(result.latencyMs()).append(',')
-                    .append(result.resultCount()).append(',')
-                    .append(result.returnedCount()).append(',')
-                    .append(escapeCsv(result.errorMessage() == null ? "" : result.errorMessage())).append('\n');
-        }
-        return builder.toString();
-    }
-
-    public String buildRelevanceCsv(Long runId) {
-        List<BenchmarkResultDto> results = getResults(runId);
-
-        StringBuilder builder = new StringBuilder();
-        builder.append("queryText,engine,precisionAtK,recallAtK,mrrAtK,ndcgAtK\n");
-        for (BenchmarkResultDto result : results) {
-            builder.append(escapeCsv(result.queryText())).append(',')
-                    .append(result.engine()).append(',')
-                    .append(formatMetric(result.precisionAtK())).append(',')
-                    .append(formatMetric(result.recallAtK())).append(',')
-                    .append(formatMetric(result.mrrAtK())).append(',')
-                    .append(formatMetric(result.ndcgAtK())).append('\n');
-        }
-        return builder.toString();
-    }
-
-    public Path getReportPath(Long runId, String fileName) {
-        BenchmarkRunSummaryDto summary = getRun(runId);
-        if (summary.reportDirectory() == null || summary.reportDirectory().isBlank()) {
-            throw new IllegalArgumentException("Benchmark run has no report directory");
-        }
-        return Paths.get(summary.reportDirectory()).resolve(fileName);
-    }
-
     private void applyLatencyMetrics(BenchmarkRun run, List<Long> supportedLatencies) {
         if (supportedLatencies.isEmpty()) {
             run.setLatencyMinMs(0L);
@@ -376,32 +242,20 @@ public class BenchmarkService {
         run.setFreshnessAvgMs(freshnessDeltas.stream().mapToLong(Long::longValue).average().orElse(0.0));
     }
 
-    private double computeThroughput(BenchmarkRun run, int queryCount) {
-        if (run.getDurationMs() == null || run.getDurationMs() <= 0L || queryCount <= 0) {
-            return 0.0;
-        }
-
-        int engineCount = SearchEngineType.values().length;
-        return (double) queryCount * engineCount * 1000.0 / run.getDurationMs();
-    }
-
-    private Path resolveReportDirectory(BenchmarkRun run) {
-        String timestamp = run.getStartedAt() == null
-                ? LocalDateTime.now().format(TIMESTAMP_FORMAT)
-                : run.getStartedAt().format(TIMESTAMP_FORMAT);
-        return Paths.get(reportDirectoryBase, timestamp, String.valueOf(run.getId()));
-    }
-
     private void persistArtifacts(BenchmarkRun run) {
         Path reportDirectoryPath = resolveReportDirectory(run);
         run.setReportDirectory(reportDirectoryPath.toString());
 
         try {
             Files.createDirectories(reportDirectoryPath);
-            Files.writeString(reportDirectoryPath.resolve("summary.md"), buildReportMarkdown(run.getId()), StandardCharsets.UTF_8);
-            Files.writeString(reportDirectoryPath.resolve("results.json"), buildReportJson(run.getId()), StandardCharsets.UTF_8);
-            Files.writeString(reportDirectoryPath.resolve("latency.csv"), buildLatencyCsv(run.getId()), StandardCharsets.UTF_8);
-            Files.writeString(reportDirectoryPath.resolve("relevance.csv"), buildRelevanceCsv(run.getId()), StandardCharsets.UTF_8);
+            Files.writeString(reportDirectoryPath.resolve("summary.md"),
+                    benchmarkSummary(run), java.nio.charset.StandardCharsets.UTF_8);
+            Files.writeString(reportDirectoryPath.resolve("results.json"),
+                    benchmarkResultsJson(run), java.nio.charset.StandardCharsets.UTF_8);
+            Files.writeString(reportDirectoryPath.resolve("latency.csv"),
+                    latencyCsv(run), java.nio.charset.StandardCharsets.UTF_8);
+            Files.writeString(reportDirectoryPath.resolve("relevance.csv"),
+                    relevanceCsv(run), java.nio.charset.StandardCharsets.UTF_8);
         } catch (Exception e) {
             throw new RuntimeException("Failed to persist benchmark artifacts", e);
         }
@@ -409,13 +263,162 @@ public class BenchmarkService {
         logger.info("Persisted benchmark artifacts for run {} at {}", run.getId(), reportDirectoryPath);
     }
 
-    private long percentile(List<Long> sortedValues, int percentile) {
-        if (sortedValues.isEmpty()) {
-            return 0L;
+    private String benchmarkSummary(BenchmarkRun run) {
+        return buildReportMarkdown(run);
+    }
+
+    private String benchmarkResultsJson(BenchmarkRun run) {
+        return buildReportJson(run);
+    }
+
+    private String latencyCsv(BenchmarkRun run) {
+        return buildLatencyCsv(run);
+    }
+
+    private String relevanceCsv(BenchmarkRun run) {
+        return buildRelevanceCsv(run);
+    }
+
+    private String buildReportMarkdown(BenchmarkRun run) {
+        BenchmarkRunSummaryDto summary = toSummaryDto(run);
+        List<BenchmarkResultDto> results = toResultDtos(run);
+
+        double avgLatency = results.stream()
+                .filter(BenchmarkResultDto::supported)
+                .mapToLong(BenchmarkResultDto::latencyMs)
+                .average()
+                .orElse(0.0);
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("# Benchmark Report\n\n");
+        builder.append("Run ID: ").append(run.getId()).append("\n");
+        builder.append("Query Set: ").append(summary.querySetName()).append("\n");
+        builder.append("Status: ").append(summary.status()).append("\n");
+        builder.append("Started At: ").append(summary.startedAt()).append("\n");
+        builder.append("Completed At: ").append(summary.completedAt()).append("\n");
+        builder.append("DurationMs: ").append(summary.durationMs() == null ? 0L : summary.durationMs()).append("\n");
+        builder.append("Throughput (queries/sec): ")
+                .append(summary.throughputQueriesPerSecond() == null ? 0.0d : String.format("%.2f", summary.throughputQueriesPerSecond()))
+                .append("\n");
+        builder.append("Latency p50/p95/p99 (ms): ")
+                .append(summary.latencyP50Ms()).append(" / ")
+                .append(summary.latencyP95Ms()).append(" / ")
+                .append(summary.latencyP99Ms()).append("\n");
+        builder.append("Freshness p50/p95/p99 (ms): ")
+                .append(summary.freshnessP50Ms()).append(" / ")
+                .append(summary.freshnessP95Ms()).append(" / ")
+                .append(summary.freshnessP99Ms()).append("\n");
+        builder.append("Average Latency: ").append(String.format("%.2f ms", avgLatency)).append("\n\n");
+
+        builder.append("| Query | Engine | LatencyMs | ResultCount | Precision@10 | Recall@10 | MRR@10 | nDCG@10 | Error |\n");
+        builder.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n");
+
+        for (BenchmarkResultDto result : results) {
+            builder.append("| ").append(escape(result.queryText())).append(" |")
+                    .append(" ").append(result.engine()).append(" |")
+                    .append(" ").append(result.latencyMs()).append(" |")
+                    .append(" ").append(result.resultCount()).append(" |")
+                    .append(" ").append(formatMetric(result.precisionAtK())).append(" |")
+                    .append(" ").append(formatMetric(result.recallAtK())).append(" |")
+                    .append(" ").append(formatMetric(result.mrrAtK())).append(" |")
+                    .append(" ").append(formatMetric(result.ndcgAtK())).append(" |")
+                    .append(" ").append(result.errorMessage() == null ? "" : result.errorMessage().replace("|", "\\|"))
+                    .append(" |\n");
         }
-        double rank = (percentile / 100.0) * (sortedValues.size() - 1);
-        int index = (int) Math.round(rank);
-        return sortedValues.get(Math.min(sortedValues.size() - 1, Math.max(0, index)));
+
+        return builder.toString();
+    }
+
+    private String buildReportJson(BenchmarkRun run) {
+        BenchmarkRunSummaryDto summary = toSummaryDto(run);
+        List<BenchmarkResultDto> results = toResultDtos(run);
+
+        try {
+            return objectMapper.writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(new BenchmarkReportPayload(summary, results));
+        } catch (Exception e) {
+            throw new UncheckedIOException(new IOException("Failed to build benchmark JSON report", e));
+        }
+    }
+
+    private String buildLatencyCsv(BenchmarkRun run) {
+        List<BenchmarkResultDto> results = toResultDtos(run);
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("queryText,engine,latencyMs,resultCount,returnedCount,errorMessage\n");
+        for (BenchmarkResultDto result : results) {
+            builder.append(escapeCsv(result.queryText())).append(',')
+                    .append(result.engine()).append(',')
+                    .append(result.latencyMs()).append(',')
+                    .append(result.resultCount()).append(',')
+                    .append(result.returnedCount()).append(',')
+                    .append(escapeCsv(result.errorMessage() == null ? "" : result.errorMessage())).append('\n');
+        }
+        return builder.toString();
+    }
+
+    private String buildRelevanceCsv(BenchmarkRun run) {
+        List<BenchmarkResultDto> results = toResultDtos(run);
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("queryText,engine,precisionAtK,recallAtK,mrrAtK,ndcgAtK\n");
+        for (BenchmarkResultDto result : results) {
+            builder.append(escapeCsv(result.queryText())).append(',')
+                    .append(result.engine()).append(',')
+                    .append(formatMetric(result.precisionAtK())).append(',')
+                    .append(formatMetric(result.recallAtK())).append(',')
+                    .append(formatMetric(result.mrrAtK())).append(',')
+                    .append(formatMetric(result.ndcgAtK())).append('\n');
+        }
+        return builder.toString();
+    }
+
+    private BenchmarkRunSummaryDto toSummaryDto(BenchmarkRun run) {
+        return new BenchmarkRunSummaryDto(
+                run.getId(),
+                run.getStatus(),
+                run.getQuerySet() == null ? null : run.getQuerySet().getName(),
+                run.getStartedAt(),
+                run.getCompletedAt(),
+                run.getTotalQueries(),
+                run.getTotalEngines(),
+                String.format("/api/benchmarks/runs/%d/report.md", run.getId()),
+                String.format("/api/benchmarks/runs/%d/report.json", run.getId()),
+                String.format("/api/benchmarks/runs/%d/latency.csv", run.getId()),
+                String.format("/api/benchmarks/runs/%d/relevance.csv", run.getId()),
+                run.getReportDirectory(),
+                run.getDurationMs(),
+                run.getThroughputQueriesPerSecond(),
+                run.getLatencyMinMs(),
+                run.getLatencyP50Ms(),
+                run.getLatencyP95Ms(),
+                run.getLatencyP99Ms(),
+                run.getLatencyAvgMs(),
+                run.getFreshnessP50Ms(),
+                run.getFreshnessP95Ms(),
+                run.getFreshnessP99Ms(),
+                run.getFreshnessAvgMs()
+        );
+    }
+
+    private List<BenchmarkResultDto> toResultDtos(BenchmarkRun run) {
+        return resultRepository.findByRunOrderByQueryTextAscEngineAsc(run).stream()
+                .map(result -> new BenchmarkResultDto(
+                        result.getId(),
+                        result.getQueryText(),
+                        result.getEngine(),
+                        result.getLatencyMs() == null ? 0L : result.getLatencyMs(),
+                        result.getResultCount() == null ? 0 : result.getResultCount(),
+                        result.getReturnedCount() == null ? 0 : result.getReturnedCount(),
+                        result.getTopResultProductIds(),
+                        result.isSupported(),
+                        result.getPrecisionAtK(),
+                        result.getRecallAtK(),
+                        result.getMrrAtK(),
+                        result.getNdcgAtK(),
+                        result.getErrorMessage()
+                ))
+                .toList();
     }
 
     private String escape(String value) {
@@ -436,6 +439,37 @@ public class BenchmarkService {
 
     private String formatMetric(Double value) {
         return value == null ? "" : String.format("%.4f", value);
+    }
+
+    private record BenchmarkReportPayload(
+            BenchmarkRunSummaryDto run,
+            List<BenchmarkResultDto> results
+    ) {
+    }
+
+    private Path resolveReportDirectory(BenchmarkRun run) {
+        String timestamp = run.getStartedAt() == null
+                ? LocalDateTime.now().format(TIMESTAMP_FORMAT)
+                : run.getStartedAt().format(TIMESTAMP_FORMAT);
+        return Paths.get(reportDirectoryBase, timestamp, String.valueOf(run.getId()));
+    }
+
+    private long percentile(List<Long> sortedValues, int percentile) {
+        if (sortedValues.isEmpty()) {
+            return 0L;
+        }
+        double rank = (percentile / 100.0) * (sortedValues.size() - 1);
+        int index = (int) Math.round(rank);
+        return sortedValues.get(Math.min(sortedValues.size() - 1, Math.max(0, index)));
+    }
+
+    private double computeThroughput(BenchmarkRun run, int queryCount) {
+        if (run.getDurationMs() == null || run.getDurationMs() <= 0L || queryCount <= 0) {
+            return 0.0;
+        }
+
+        int engineCount = SearchEngineType.values().length;
+        return (double) queryCount * engineCount * 1000.0 / run.getDurationMs();
     }
 
     private static long toMs(long nanos) {
@@ -478,11 +512,5 @@ public class BenchmarkService {
         }
 
         return idcg == 0.0 ? 0.0 : dcg / idcg;
-    }
-
-    public record BenchmarkReportPayload(
-            BenchmarkRunSummaryDto run,
-            List<BenchmarkResultDto> results
-    ) {
     }
 }
