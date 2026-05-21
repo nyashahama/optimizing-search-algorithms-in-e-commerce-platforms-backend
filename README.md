@@ -13,9 +13,9 @@ Compare search approaches across latency, indexing throughput, freshness, and re
 
 ## Current Phase
 
-Current phase: **Phase 2 - Infrastructure**
+Current phase: **Phase 5 - Verification And Documentation**
 
-Phase 0 made the existing Spring Boot backend buildable, testable, documented, and safe enough to support the search benchmarking lab. Phase 1 added a common search abstraction so search engines can be compared through one API. Phase 2 adds infrastructure dependencies for local development.
+Phase 0 made the existing Spring Boot backend buildable, testable, documented, and safe enough to support the search benchmarking lab. Phase 1 added a common search abstraction so search engines can be compared through one API. Phase 2 added infrastructure dependencies for local development. Phase 3 added event-driven indexing and OpenSearch synchronization. Phase 4 implemented benchmark execution, metrics, and report artifacts. Phase 5 added completion docs, repeatable runbook, and verification guidance.
 
 ## Phase Roadmap
 
@@ -23,10 +23,10 @@ Phase 0 made the existing Spring Boot backend buildable, testable, documented, a
 | --- | --- | --- |
 | Phase 0 | Stabilize Current Backend | Complete |
 | Phase 1 | Search Abstraction | Complete |
-| Phase 2 | Infrastructure | Current |
-| Phase 3 | Event-Driven Indexing | Upcoming |
-| Phase 4 | Benchmarking | Upcoming |
-| Phase 5 | Verification And Documentation | Upcoming |
+| Phase 2 | Infrastructure | Complete |
+| Phase 3 | Event-Driven Indexing | Complete |
+| Phase 4 | Benchmarking | Complete |
+| Phase 5 | Verification And Documentation | Current |
 
 ## Tech Stack
 
@@ -58,6 +58,15 @@ Expected: Java 21.
 - `GET /api/search?q=wireless&engine=in_memory&limit=20` runs a single search engine.
 - `GET /api/search/compare?q=wireless&limit=20` runs all search engines side-by-side.
 - `GET /api/products/search?query=wireless` delegates to the in-memory engine for backward compatibility.
+- `POST /api/index/rebuild` rebuilds the OpenSearch index.
+- `GET /api/index/status` reports document count plus event queue health including backpressure indicators.
+- `POST /api/benchmarks/runs` starts a benchmark run.
+- `GET /api/benchmarks/runs/{runId}` returns run status and summary.
+- `GET /api/benchmarks/runs/{runId}/results` returns benchmark row results.
+- `GET /api/benchmarks/runs/{runId}/report.md` downloads a markdown benchmark report.
+- `GET /api/benchmarks/runs/{runId}/report.json` returns JSON report payload.
+- `GET /api/benchmarks/runs/{runId}/latency.csv` returns per-query latency rows.
+- `GET /api/benchmarks/runs/{runId}/relevance.csv` returns per-query relevance metrics.
 
 ## Run The API Locally
 
@@ -87,9 +96,118 @@ export SPRING_DATASOURCE_PASSWORD=Gyver
 
 The API starts on `http://localhost:8080`.
 
+## Benchmark Dataset Seeding and Startup
+
+Benchmark query sets and judgments are seeded automatically from:
+
+- `src/main/resources/benchmark/seed/benchmark-fixtures.json`
+
+On first startup, if no query sets exist, the service creates an `electronics-basic` fixture with deterministic queries and judgments.
+
+The seed can be refreshed by truncating benchmark tables before startup:
+
+```sql
+TRUNCATE TABLE benchmark_judgments, benchmark_queries, benchmark_query_sets CASCADE;
+```
+
+Then restart the app and query set creation runs again.
+
+## Local Verification Runbook
+
+Use this sequence for a deterministic end-to-end check:
+
+1. Start local dependencies:
+
+```bash
+cp .env.example .env
+docker compose up -d
+```
+
+2. Start the API:
+
+```bash
+SPRING_PROFILES_ACTIVE=docker ./mvnw spring-boot:run
+```
+
+3. Run benchmark on the seeded dataset:
+
+```bash
+curl -s -X POST "http://localhost:8080/api/benchmarks/runs" \
+  -H "Content-Type: application/json" \
+  -d '{"limit":20}'
+```
+
+4. Capture the returned run id and check summary:
+
+```bash
+RUN_ID=$(curl -s -X POST "http://localhost:8080/api/benchmarks/runs" \
+  -H "Content-Type: application/json" \
+  -d '{"limit":20}' | jq '.runId')
+curl -s "http://localhost:8080/api/benchmarks/runs/${RUN_ID}"
+```
+
+Expected output includes: `status`, `throughputQueriesPerSecond`, `latencyP50Ms`, `latencyP95Ms`, `latencyP99Ms`, `freshnessP50Ms`.
+
+5. Fetch benchmark artifacts and verify files exist:
+
+```bash
+curl -s "http://localhost:8080/api/benchmarks/runs/${RUN_ID}/report.md"
+curl -s "http://localhost:8080/api/benchmarks/runs/${RUN_ID}/report.json"
+curl -s "http://localhost:8080/api/benchmarks/runs/${RUN_ID}/latency.csv"
+curl -s "http://localhost:8080/api/benchmarks/runs/${RUN_ID}/relevance.csv"
+ls -R reports
+```
+
+## Metrics Interpretation
+
+### Search metrics
+
+- `latencyP50Ms`, `latencyP95Ms`, `latencyP99Ms`: percentiles computed on successful searches.
+- `throughputQueriesPerSecond`: total benchmark queries executed per second for the full run.
+
+### Freshness metrics
+
+- `freshnessP50Ms`, `freshnessP95Ms`, `freshnessP99Ms`: processing lag between indexing event creation and completion.
+- Lower values indicate better indexing freshness and lower event lag.
+
+### Relevance metrics
+
+- `precisionAtK`, `recallAtK`, `mrrAtK`, `ndcgAtK` are computed against seeded judgments and help compare relevance quality.
+
+## Troubleshooting
+
+### PostgreSQL connectivity errors
+
+If startup fails with connection errors, confirm:
+
+```bash
+export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/store_db
+export SPRING_DATASOURCE_USERNAME=postgres
+export SPRING_DATASOURCE_PASSWORD=Gyver
+```
+
+Then restart the app.
+
+### Kafka consumer/producer errors
+
+If indexing events are not being consumed, verify `KAFKA_BOOTSTRAP_SERVERS` points at a running broker and topic auto-create is enabled (default in Compose).
+
+### OpenSearch failures in search/indexing
+
+If `/api/search/compare` shows OpenSearch errors, check OpenSearch health and that the index can be created:
+
+```bash
+curl -s "http://localhost:9200/_cluster/health?pretty"
+```
+
+If you need to ignore OpenSearch temporarily, benchmarking still proceeds for other engines.
+
 ## Design Docs
 
 - `docs/superpowers/specs/2026-05-21-search-benchmarking-lab-design.md`
 - `docs/superpowers/plans/2026-05-21-phase-0-stabilize-current-backend.md`
 - `docs/superpowers/plans/2026-05-21-phase-1-search-abstraction.md`
 - `docs/superpowers/plans/2026-05-21-phase-2-infrastructure.md`
+- `docs/superpowers/plans/2026-05-21-phase-3-event-driven-indexing.md`
+- `docs/superpowers/plans/2026-05-21-phase-4-benchmarking.md`
+- `docs/superpowers/plans/2026-05-21-phase-5-verification-and-documentation.md`
