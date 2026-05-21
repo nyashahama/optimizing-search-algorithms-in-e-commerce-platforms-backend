@@ -31,7 +31,7 @@ public class BenchmarkController {
     ) {
         Long querySetId = request == null ? null : request.querySetId();
         Integer limit = request == null ? null : request.limit();
-        return ResponseEntity.ok(benchmarkService.startRun(querySetId, limit));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(benchmarkService.startRun(querySetId, limit));
     }
 
     @GetMapping("/runs/{runId}")
