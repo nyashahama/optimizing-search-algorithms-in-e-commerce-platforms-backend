@@ -1,4 +1,4 @@
-# Optimizing Search Algorithms In E-commerce Platforms - Backend
+# E-commerce Search Optimization Backend
 
 This project is being rebuilt into a production-style search benchmarking lab using e-commerce catalog data.
 
