@@ -136,6 +136,13 @@ public class UserService {
         return userRepository.findById(id);
     }
 
+    public Optional<User> getUserByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return Optional.empty();
+        }
+        return userRepository.findByEmail(email);
+    }
+
     public Role findRole(String roleName) {
         return databaseUserDetailsService.roleByName(roleName);
     }
