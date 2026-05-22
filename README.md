@@ -13,8 +13,8 @@ Compare search approaches across latency, indexing throughput, freshness, and re
 
 ## Project Status
 
-Current phase: **Complete**
-Next phase: **Production Readiness Monitoring**
+Current phase: **Phase 6 - Commerce Operations Hardening**
+Next phase: **Phase 7 - Observability and Operational Playbooks**
 
 Phase 0 made the existing Spring Boot backend buildable, testable, documented, and safe enough to support the search benchmarking lab. Phase 1 added a common search abstraction so search engines can be compared through one API. Phase 2 added infrastructure dependencies for local development. Phase 3 added event-driven indexing and OpenSearch synchronization. Phase 4 implemented benchmark execution, metrics, and report artifacts. Phase 5 added completion docs, repeatable runbook, and verification guidance.
 
@@ -28,6 +28,8 @@ Phase 0 made the existing Spring Boot backend buildable, testable, documented, a
 | Phase 3 | Event-Driven Indexing | Complete |
 | Phase 4 | Benchmarking | Complete |
 | Phase 5 | Verification And Documentation | Complete |
+| Phase 6 | Commerce Operations Hardening | Complete |
+| Phase 7 | Observability And Operational Playbooks | Next |
 
 ## Tech Stack
 
@@ -59,8 +61,17 @@ Expected: Java 21.
 - `GET /api/search?q=wireless&engine=in_memory&limit=20` runs a single search engine.
 - `GET /api/search/compare?q=wireless&limit=20` runs all search engines side-by-side.
 - `GET /api/products/search?query=wireless` delegates to the in-memory engine for backward compatibility.
+- `GET /api/inventory/{productId}?variantId=` fetches current inventory record for a product/variant.
+- `PUT /api/inventory/{productId}?variantId=` creates or updates inventory quantity, location, and reorder threshold.
+- `PATCH /api/inventory/{productId}/adjust?variantId=` increments/decrements inventory stock atomically.
+- `GET /api/inventory/low-stock` lists inventory rows at or below reorder threshold.
+- `GET /api/suppliers` and `GET /api/suppliers/{supplierId}` read supplier records.
+- `POST /api/suppliers`, `PUT /api/suppliers/{supplierId}`, `DELETE /api/suppliers/{supplierId}` manage suppliers.
 - `POST /api/index/rebuild` rebuilds the OpenSearch index.
 - `GET /api/index/status` reports document count plus event queue health including backpressure indicators.
+- `GET /api/payments/orders/{orderId}` returns payment details (order owner or admin).
+- `POST /api/payments/orders/{orderId}/capture` captures a pending payment.
+- `POST /api/payments/orders/{orderId}/refund` refunds a captured payment.
 - `POST /api/benchmarks/runs` starts a benchmark run and returns `202 Accepted` with status `QUEUED`.
 - `GET /api/benchmarks/runs/{runId}` returns run status and summary.
 - `GET /api/benchmarks/runs/{runId}/results` returns benchmark row results.
