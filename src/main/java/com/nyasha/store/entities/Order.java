@@ -1,5 +1,6 @@
 package com.nyasha.store.entities;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -15,6 +16,7 @@ public class Order {
     private Long orderId;
 
     @ManyToOne
+    @JsonIgnore
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
@@ -26,8 +28,10 @@ public class Order {
     private Set<OrderItem> orderItems = new HashSet<>();
 
     @OneToOne(mappedBy = "order", cascade = CascadeType.ALL)
+    @JsonIgnore
     private Payment payment;
 
     @OneToOne(mappedBy = "order", cascade = CascadeType.ALL)
+    @JsonIgnore
     private ShippingInfo shippingInfo;
 }

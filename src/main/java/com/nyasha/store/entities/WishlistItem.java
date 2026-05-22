@@ -1,17 +1,21 @@
 package com.nyasha.store.entities;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
 @Entity
 @Table(name = "wishlist_items")
-@Data
+@Getter
+@Setter
 public class WishlistItem {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long wishlistItemId;
 
     @ManyToOne
+    @JsonIgnore
     @JoinColumn(name = "wishlist_id", nullable = false)
     private Wishlist wishlist;
 
