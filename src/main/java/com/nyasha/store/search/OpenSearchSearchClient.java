@@ -167,6 +167,24 @@ public class OpenSearchSearchClient {
         }
     }
 
+    public String clusterHealthStatus() {
+        try {
+            ResponseEntity<String> response = restTemplate.getForEntity(
+                    URI.create(url("/_cluster/health")),
+                    String.class
+            );
+            JsonNode body = objectMapper.readTree(response.getBody() == null ? "{}" : response.getBody());
+            return body.path("status").asText("unknown");
+        } catch (Exception e) {
+            return "unreachable";
+        }
+    }
+
+    public boolean isHealthy() {
+        String status = clusterHealthStatus();
+        return "green".equalsIgnoreCase(status) || "yellow".equalsIgnoreCase(status);
+    }
+
     private void ensureIndex() {
         if (Boolean.TRUE.equals(initialized)) {
             return;

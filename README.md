@@ -13,8 +13,8 @@ Compare search approaches across latency, indexing throughput, freshness, and re
 
 ## Project Status
 
-Current phase: **Phase 6 - Commerce Operations Hardening**
-Next phase: **Phase 7 - Observability and Operational Playbooks**
+Current phase: **Phase 7 - Observability And Operational Playbooks**
+Next phase: **Project Complete**
 
 Phase 0 made the existing Spring Boot backend buildable, testable, documented, and safe enough to support the search benchmarking lab. Phase 1 added a common search abstraction so search engines can be compared through one API. Phase 2 added infrastructure dependencies for local development. Phase 3 added event-driven indexing and OpenSearch synchronization. Phase 4 implemented benchmark execution, metrics, and report artifacts. Phase 5 added completion docs, repeatable runbook, and verification guidance.
 
@@ -29,7 +29,7 @@ Phase 0 made the existing Spring Boot backend buildable, testable, documented, a
 | Phase 4 | Benchmarking | Complete |
 | Phase 5 | Verification And Documentation | Complete |
 | Phase 6 | Commerce Operations Hardening | Complete |
-| Phase 7 | Observability And Operational Playbooks | Next |
+| Phase 7 | Observability And Operational Playbooks | Complete |
 
 ## Tech Stack
 
@@ -211,6 +211,33 @@ ls -R reports
 - `precisionAtK`, `recallAtK`, `mrrAtK`, `ndcgAtK` are computed against seeded judgments and help compare relevance quality.
 
 ## Troubleshooting
+
+## Operational Controls
+
+### Runtime status endpoint
+
+The operational endpoint gives an ops-focused single response with dependency status and current backlog:
+
+```bash
+curl -s http://localhost:8080/api/ops/status
+```
+
+Response highlights:
+
+- `overallStatus`: `UP`, `DEGRADED`, or `DOWN`
+- `openSearchClusterHealth`: `green`, `yellow`, `red`, or `unreachable`
+- `pendingIndexEvents`, `failedIndexEvents`, `deadLetterIndexEvents`
+- `queuedBenchmarkRuns`, `runningBenchmarkRuns`, `failedBenchmarkRuns`
+- `activeWarnings`
+
+### Request correlation
+
+All API responses include `X-Request-Id`:
+
+- If the client sends `X-Request-Id`, that value is preserved.
+- If omitted, the system generates a request id and returns it in the response.
+
+This id is written to logs as `requestId` in the console format.
 
 ### PostgreSQL connectivity errors
 
