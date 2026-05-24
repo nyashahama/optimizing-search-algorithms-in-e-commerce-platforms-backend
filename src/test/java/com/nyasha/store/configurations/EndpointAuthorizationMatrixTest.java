@@ -69,6 +69,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -484,7 +485,7 @@ class EndpointAuthorizationMatrixTest {
             return;
         }
         if (status >= 200 && status < 300) {
-            String payload = result.getResponse().getContentAsString();
+            String payload = new String(result.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8);
             assertThat(payload).isNotBlank();
             assertThat(result.getResponse().getContentType()).isNotNull();
         }
