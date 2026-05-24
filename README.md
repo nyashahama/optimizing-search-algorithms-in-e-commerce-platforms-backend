@@ -1,19 +1,25 @@
-# E-commerce Search Optimization Backend
+# Ecommerce Commerce Backend + Search Optimization Engine
 
-This project is being rebuilt into a production-style search benchmarking lab using e-commerce catalog data.
+This repository is a production-style Spring Boot backend for real storefront workflows.
 
-## Goal
+It combines:
 
-Compare search approaches across latency, indexing throughput, freshness, and relevance:
+1. Complete commerce API surfaces for discovery, cart, checkout, orders, reviews, addresses, inventory, returns, and payments.
+2. Multi-engine search comparison (`sql_like`, `postgres_fts`, `in_memory`, and `opensearch`) for product discovery and ranking benchmarking.
+3. Operational controls (`/api/index`, `/api/benchmarks`, `/api/ops`) that show indexing and search-latency health at runtime.
 
-1. SQL LIKE
-2. PostgreSQL full-text search
-3. Custom in-memory inverted index
-4. OpenSearch BM25
+The project goal is practical: teams can reuse this API as a starting point for an ecommerce platform while immediately validating search tradeoffs.
 
-2. Keep endpoint behavior consistent and auditable across all e-commerce surfaces (auth, request shape, and status semantics).
+## Product Description
 
-## Endpoints by Domain
+This is not only a benchmark project. It is a **commerce-ready backend baseline** with:
+
+- Secure, role-aware access for customer/admin paths.
+- Public storefront read endpoints for discovery (`products`, `categories`, `search`, public reviews).
+- Stable, tested API contracts for every major route in one place.
+- A clear execution strategy for index freshness, benchmarking, and ops readiness.
+
+## Endpoint Surface That Matters for Ecommerce
 
 - **Authentication and accounts**: `POST /users/register`, `POST /users/login`, `GET/PUT/DELETE /users`
 - **Catalog and search**: `GET /api/products`, `GET /api/products/{id}`, `POST/PUT/DELETE /api/products`, `GET /api/categories`, `GET /api/search`, `GET /api/search/compare`
@@ -24,23 +30,38 @@ Compare search approaches across latency, indexing throughput, freshness, and re
 - **Inventory and suppliers**: `GET /api/inventory/{productId}`, `PUT /api/inventory/{productId}`, `PATCH /api/inventory/{productId}/adjust`, `GET /api/inventory/low-stock`, `GET /api/suppliers`
 - **Payments and addresses**: `GET /api/payments/orders/{orderId}`, `POST /api/payments/orders/{orderId}/capture|refund`, `POST/GET/PUT/DELETE /api/addresses/me`
 - **Benchmark and operations**: `POST /api/benchmarks/runs`, `GET /api/benchmarks/runs/{id}`, `GET /api/benchmarks/runs/{id}/artifacts/*`, `POST /api/index/rebuild`, `GET /api/ops/status`
-- **API readiness**: The endpoint list above is enforced by `EndpointAuthorizationMatrixTest` and compared in `EndpointDocumentationAlignmentTest`, so endpoint additions require explicit contract updates.
+- **API readiness**: The endpoint list above is enforced by tests and contract checks, so endpoint additions require explicit updates.
 
-Shopping, checkout, catalog, and search endpoint access is now designed for commerce: discovery/search routes are public, while checkout and account/order workflows remain authenticated.
+Shopping, checkout, catalog, and search endpoint access is now intentionally separated:
 
-## Endpoint Contract for Ecommerce Adoption
+- Public storefront: `GET /api/products`, `GET /api/categories`, `GET /api/search`, `GET /api/reviews/products/{productId}`.
+- Authenticated customer workflows: cart, checkout, wishlist, address, order, review and payment reads/writes.
+- Admin workflows: catalog mutation, supplier management, index rebuild, benchmark orchestration, and operational insights.
 
-This project is structured to be usable as a starter commerce backend:
+## Commerce Readiness Controls
 
-- **Discovery and catalog/search** routes are public by design for storefronts (`/api/products`, `/api/categories`, `/api/search`, `/api/reviews/products/{productId}`).
-- **Customer routes** for carts, checkout, addresses, orders, returns, reviews, and wishlists.
-- **Administrative routes** for catalog, benchmark control, index control, user administration, and operational actions.
+- `EndpointAuthorizationMatrixTest` validates auth expectations and successful response behavior for all documented endpoints.
+- `EndpointContractCoverageTest` enforces that every controller route is represented in the matrix.
+- `EndpointDocumentationAlignmentTest` checks that the README-style catalog is represented in code-level coverage.
+- `CommerceFlowSmokeIT` validates a real buyer flow: browse → cart → preview → confirm → order list → compare.
+- `OperationsReadinessEndpointTest` verifies health/info are public and operational telemetry remains admin-only.
 
-Route intent and auth behavior are validated in:
+### What makes this adoptable
 
-- `src/test/java/com/nyasha/store/configurations/EndpointAuthorizationMatrixTest.java`
+- Strongly test-driven endpoint contracts instead of ad-hoc route growth.
+- Public discovery routes for SEO-friendly browsing without requiring frontend auth bootstrap.
+- Backend checks for business-critical flows (`idempotency`, payment capture/refund gating, return lifecycle states).
+- Role-aware separation between customer and admin use cases.
 
-This keeps the API surface explicit for teams expecting predictable security behavior before adding storefront or storefront-adjacent integrations.
+## Ecommerce Team Validation Checklist
+
+Use this checklist before demoing or sharing:
+
+- `./mvnw test -Dtest=EndpointAuthorizationMatrixTest,EndpointContractCoverageTest`
+- `./mvnw test -Dtest=EndpointDocumentationAlignmentTest,OperationsReadinessEndpointTest`
+- `./mvnw test -Dtest=CommerceFlowSmokeIT`
+
+If all pass, the API is in a credible position for storefront pilots and integration planning.
 ## Project Status
 
 Current phase: **Phase 7 - Observability And Operational Playbooks**

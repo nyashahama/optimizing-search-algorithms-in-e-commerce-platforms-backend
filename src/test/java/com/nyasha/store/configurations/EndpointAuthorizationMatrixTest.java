@@ -78,6 +78,7 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
@@ -485,10 +486,16 @@ class EndpointAuthorizationMatrixTest {
     }
 
     private void assertSuccessfulAuthorizedResponse(AuthorizationCase authorizationCase, MvcResult result, int status) {
-        if (status == 204 || status == 202) {
+        if ((status == 204) || (status == 202 && authorizationCase.shouldAllowEmptyBody())) {
             return;
         }
         if (status >= 200 && status < 300) {
+            if (status == 202 && !authorizationCase.shouldAllowEmptyBody()) {
+                assertThat(result.getResponse().getContentAsByteArray())
+                        .as("Expected benchmark or async endpoint with content for %s %s".formatted(
+                                authorizationCase.method(), authorizationCase.path()))
+                        .isNotEmpty();
+            }
             String payload = new String(result.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8);
             assertThat(payload)
                     .as("Expected non-blank response body for %s %s".formatted(
@@ -624,5 +631,12 @@ class EndpointAuthorizationMatrixTest {
             int userStatus,
             int adminStatus
     ) {
+        private static final Set<String> EMPTY_RESPONSE_SUCCESS_PATHS = Set.of(
+                "POST /api/index/rebuild"
+        );
+
+        public boolean shouldAllowEmptyBody() {
+            return EMPTY_RESPONSE_SUCCESS_PATHS.contains(method() + " " + path());
+        }
     }
 }
