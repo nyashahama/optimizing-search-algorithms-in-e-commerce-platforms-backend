@@ -26,13 +26,13 @@ Compare search approaches across latency, indexing throughput, freshness, and re
 - **Benchmark and operations**: `POST /api/benchmarks/runs`, `GET /api/benchmarks/runs/{id}`, `GET /api/benchmarks/runs/{id}/artifacts/*`, `POST /api/index/rebuild`, `GET /api/ops/status`
 - **API readiness**: The endpoint list above is enforced by `EndpointAuthorizationMatrixTest` and compared in `EndpointDocumentationAlignmentTest`, so endpoint additions require explicit contract updates.
 
-For storefront behavior, read-only catalog/search endpoints are intentionally public (`/api/products`, `/api/categories`, `/api/search`, and `/api/reviews/products/{productId}`), while shopping, checkout, and operational actions remain authenticated.
+Shopping, checkout, catalog, and search endpoint access is governed by role requirements in `SecurityConfig` (not anonymous/public).
 
 ## Endpoint Contract for Ecommerce Adoption
 
 This project is structured to be usable as a starter commerce backend:
 
-- **Public discovery** routes for browse/search with no auth required.
+- **Discovery and catalog/search** routes that are currently protected behind user/admin auth.
 - **Customer routes** for carts, checkout, addresses, orders, returns, reviews, and wishlists.
 - **Administrative routes** for catalog, benchmark control, index control, user administration, and operational actions.
 
