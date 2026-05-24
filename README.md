@@ -37,6 +37,20 @@ Primary outcomes:
 
 For storefront behavior, read-only catalog/search endpoints are intentionally public (`/api/products`, `/api/categories`, `/api/search`, and `/api/reviews/products/{productId}`), while shopping, checkout, and operational actions remain authenticated.
 
+## Endpoint Contract for Ecommerce Adoption
+
+This project is structured to be usable as a starter commerce backend:
+
+- **Public discovery** routes for browse/search with no auth required.
+- **Customer routes** for carts, checkout, addresses, orders, returns, reviews, and wishlists.
+- **Administrative routes** for catalog, benchmark control, index control, user administration, and operational actions.
+
+Route intent and auth behavior are validated in:
+
+- `src/test/java/com/nyasha/store/configurations/EndpointAuthorizationMatrixTest.java`
+
+This keeps the API surface explicit for teams expecting predictable security behavior before adding storefront or storefront-adjacent integrations.
+
 ## Project Status
 
 Current phase: **Phase 7 - Observability And Operational Playbooks**
