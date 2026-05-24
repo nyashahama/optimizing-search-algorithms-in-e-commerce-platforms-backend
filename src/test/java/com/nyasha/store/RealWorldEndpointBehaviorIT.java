@@ -6,11 +6,13 @@ import com.nyasha.store.entities.Category;
 import com.nyasha.store.entities.Inventory;
 import com.nyasha.store.entities.Product;
 import com.nyasha.store.entities.Role;
+import com.nyasha.store.entities.Supplier;
 import com.nyasha.store.entities.User;
 import com.nyasha.store.repositories.CategoryRepository;
 import com.nyasha.store.repositories.InventoryRepository;
 import com.nyasha.store.repositories.ProductRepository;
 import com.nyasha.store.repositories.RoleRepository;
+import com.nyasha.store.repositories.SupplierRepository;
 import com.nyasha.store.repositories.UserRepository;
 import com.nyasha.store.services.UserService;
 import com.nyasha.store.utils.ProductIndex;
@@ -35,6 +37,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -57,6 +60,9 @@ class RealWorldEndpointBehaviorIT {
 
     @Autowired
     private InventoryRepository inventoryRepository;
+
+    @Autowired
+    private SupplierRepository supplierRepository;
 
     @Autowired
     private ProductIndex productIndex;
@@ -245,6 +251,139 @@ class RealWorldEndpointBehaviorIT {
                 .andExpect(jsonPath("name").value("Ops Product"));
     }
 
+    @Test
+    void adminCanManageSuppliersAndInventory() throws Exception {
+        String marker = "admin-" + UUID.randomUUID();
+        String adminEmail = marker + "@example.com";
+        String adminPassword = randomPassword();
+        seedAdminUser(adminEmail, adminPassword);
+
+        MvcResult supplierCreate = mockMvc.perform(post("/api/suppliers")
+                        .with(httpBasic(adminEmail, adminPassword))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"%s",
+                                  "contactInfo":"%s",
+                                  "address":"%s"
+                                }
+                                """.formatted("Supplier " + marker, "support@" + marker + ".test", "123 Commerce Ave"))
+                )
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        long supplierId = readTree(supplierCreate).path("supplierId").asLong();
+        assertThat(supplierId).isPositive();
+
+        mockMvc.perform(get("/api/suppliers").with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk());
+
+        JsonNode supplier = readTree(mockMvc.perform(get("/api/suppliers/{id}", supplierId).with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        assertThat(supplier.path("name").asText()).contains(marker);
+
+        String updatedSupplierName = "Updated Supplier " + marker;
+        JsonNode updatedSupplier = readTree(mockMvc.perform(put("/api/suppliers/{id}", supplierId)
+                        .with(httpBasic(adminEmail, adminPassword))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"%s",
+                                  "contactInfo":"Updated contact",
+                                  "address":"Updated address"
+                                }
+                                """.formatted(updatedSupplierName))
+                )
+                .andExpect(status().isOk())
+                .andReturn());
+
+        assertThat(updatedSupplier.path("name").asText()).isEqualTo(updatedSupplierName);
+
+        Supplier supplier = supplierRepository.findById(supplierId).orElseThrow();
+        Product linkedProduct = seedProduct(
+                "Supplier Bound Product " + marker,
+                "SP-" + UUID.randomUUID(),
+                120.0,
+                null,
+                supplier
+        );
+        seedInventory(linkedProduct, 4);
+
+        MvcResult orphanSupplierCreate = mockMvc.perform(post("/api/suppliers")
+                        .with(httpBasic(adminEmail, adminPassword))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"%s",
+                                  "contactInfo":"%s",
+                                  "address":"%s"
+                                }
+                                """.formatted("Orphan " + marker, "ops@" + marker + ".test", "456 Side St")
+                )
+                .andExpect(status().isCreated())
+                .andReturn());
+
+        long orphanSupplierId = readTree(orphanSupplierCreate).path("supplierId").asLong();
+        assertThat(orphanSupplierId).isPositive();
+        assertThat(readTree(orphanSupplierCreate).path("supplierId").asLong()).isEqualTo(orphanSupplierId);
+
+        mockMvc.perform(delete("/api/suppliers/{id}", supplierId).with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(delete("/api/suppliers/{id}", orphanSupplierId).with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/suppliers/{id}", orphanSupplierId).with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isBadRequest());
+
+        Product inventoryProduct = seedProduct("Inventory Product " + marker, "IP-" + UUID.randomUUID(), 49.99, null);
+        seedInventory(inventoryProduct, 2);
+
+        JsonNode lowStockBefore = readTree(mockMvc.perform(get("/api/inventory/low-stock")
+                        .with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        assertThat(hasMatch(lowStockBefore, item -> item.path("productId").asLong() == inventoryProduct.getProductId()))
+                .isTrue();
+
+        JsonNode upsertedInventory = readTree(mockMvc.perform(put("/api/inventory/{id}", inventoryProduct.getProductId())
+                        .with(httpBasic(adminEmail, adminPassword))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "quantity": 12,
+                                  "location": "main-dc",
+                                  "reorderThreshold": 4
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        assertThat(upsertedInventory.path("quantity").asInt()).isEqualTo(12);
+        assertThat(upsertedInventory.path("reorderThreshold").asInt()).isEqualTo(4);
+
+        JsonNode adjustedInventory = readTree(mockMvc.perform(patch("/api/inventory/{id}/adjust", inventoryProduct.getProductId())
+                        .with(httpBasic(adminEmail, adminPassword))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "delta": -3
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        assertThat(adjustedInventory.path("quantity").asInt()).isEqualTo(9);
+
+        mockMvc.perform(get("/api/inventory/{id}", inventoryProduct.getProductId())
+                        .with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("quantity").value(9));
+    }
+
     private Category seedCategory(String name) {
         Category category = new Category();
         category.setName(name);
@@ -252,11 +391,16 @@ class RealWorldEndpointBehaviorIT {
     }
 
     private Product seedProduct(String name, String sku, double basePrice, Category category) {
+        return seedProduct(name, sku, basePrice, category, null);
+    }
+
+    private Product seedProduct(String name, String sku, double basePrice, Category category, Supplier supplier) {
         Product product = new Product();
         product.setName(name);
         product.setDescription("Integration seed");
         product.setSku(sku);
         product.setBasePrice(basePrice);
+        product.setSupplier(supplier);
 
         if (category != null) {
             Set<Category> categories = new HashSet<>();
