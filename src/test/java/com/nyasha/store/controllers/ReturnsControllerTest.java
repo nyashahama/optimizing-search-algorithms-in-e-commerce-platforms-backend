@@ -39,7 +39,7 @@ class ReturnsControllerTest {
         assertThat(returnsController.myReturns(auth)).containsExactly(listed);
         assertThat(returnsController.approve(1L).getBody()).isSameAs(expected);
         assertThat(returnsController.reject(1L).getBody()).isSameAs(expected);
-        assertThat(returnsController.refund(1L, "refund-key").getBody()).isSameAs(expected);
+        assertThat(returnsController.refund(auth, 1L, "refund-key").getBody()).isSameAs(expected);
     }
 
     private User user(long id) {

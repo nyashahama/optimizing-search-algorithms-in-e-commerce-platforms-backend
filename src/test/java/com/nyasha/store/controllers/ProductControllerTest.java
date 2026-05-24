@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -46,6 +45,8 @@ class ProductControllerTest {
         when(productService.searchByText("wireless")).thenReturn(Set.of(single));
         when(productService.autocomplete("wire")).thenReturn(List.of(single));
         when(productService.getProductsByCategory("headphones")).thenReturn(List.of(single));
+        when(productSearchService.search("in_memory", "wireless", 20))
+                .thenReturn(SearchResult.success(SearchEngineType.IN_MEMORY, 3L, List.of(single)));
 
         assertThat(productController.getAllProducts().getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(productController.getAllProducts().getBody()).containsExactly(single);
@@ -59,7 +60,7 @@ class ProductControllerTest {
 
     @Test
     void searchByTextUsesSearchServiceEngineInMemory() {
-        SearchResult result = SearchResult.success(SearchEngineType.IN_MEMORY, 3L, new HashSet<>());
+        SearchResult result = SearchResult.success(SearchEngineType.IN_MEMORY, 3L, List.of());
         when(productSearchService.search("in_memory", "query", 20)).thenReturn(result);
 
         Set<Product> products = productController.searchByText("query").getBody();
