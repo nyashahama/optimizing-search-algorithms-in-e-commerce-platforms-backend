@@ -14,6 +14,7 @@ import com.nyasha.store.repositories.OrderRepository;
 import com.nyasha.store.repositories.ReturnRepository;
 import com.nyasha.store.services.payment.PaymentService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -111,6 +112,7 @@ public class ReturnService {
         return returnRepository.save(returnEntity);
     }
 
+    @Transactional
     public Return refundReturn(Long returnId, Long userId, String idempotencyKey) {
         Return returnEntity = getReturn(returnId);
         validateCaller(returnEntity, userId);
