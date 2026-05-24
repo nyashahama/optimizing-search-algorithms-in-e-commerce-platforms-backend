@@ -79,6 +79,7 @@ This backend is built as an adoptable commerce API backbone with executable endp
 - `EndpointContractCoverageTest` enforces that route definitions in controllers and the matrix stay in lockstep.
 - `CommerceFlowSmokeIT` validates a real-commerce user journey that spans catalog, cart, checkout, order, and search comparison.
 - `OperationsReadinessEndpointTest` verifies operational endpoint behavior (`/actuator/health`, `/actuator/info`, and admin-only metrics endpoints).
+- `*ControllerTest` now covers additional ecommerce controller surfaces (catalog, search, wishlist, returns, checkout, index rebuild, and benchmark artifact endpoints) with direct service-delegation assertions.
 
 Use this check when accepting endpoint changes:
 
