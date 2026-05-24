@@ -28,12 +28,14 @@ Primary outcomes:
 
 - **Authentication and accounts**: `POST /users/register`, `POST /users/login`, `GET/PUT/DELETE /users`
 - **Catalog and search**: `GET /api/products`, `GET /api/products/{id}`, `POST/PUT/DELETE /api/products`, `GET /api/categories`, `GET /api/search`, `GET /api/search/compare`
+- **Wishlist**: `GET /api/wishlists/me`, `POST /api/wishlists/me/items`, `DELETE /api/wishlists/me/items/{itemId}`
 - **Cart and wishlist**: `GET /api/carts/me`, `POST /api/carts/me/items`, `PATCH /api/carts/me/items/{itemId}`, `DELETE /api/carts/me/items/{itemId}`, `DELETE /api/carts/me`
 - **Checkout and orders**: `POST /api/checkouts/preview`, `POST /api/checkouts/confirm`, `GET /api/orders/me`, `POST /api/orders/{id}/pack|ship|delivered|cancel`
 - **Returns and reviews**: `POST /api/returns/{orderId}`, `POST /api/returns/{returnId}/approve|reject|refund`, `POST /api/reviews`, `GET /api/reviews/products/{productId}`
 - **Inventory and suppliers**: `GET /api/inventory/{productId}`, `PUT /api/inventory/{productId}`, `PATCH /api/inventory/{productId}/adjust`, `GET /api/inventory/low-stock`, `GET /api/suppliers`
 - **Payments and addresses**: `GET /api/payments/orders/{orderId}`, `POST /api/payments/orders/{orderId}/capture|refund`, `POST/GET/PUT/DELETE /api/addresses/me`
 - **Benchmark and operations**: `POST /api/benchmarks/runs`, `GET /api/benchmarks/runs/{id}`, `GET /api/benchmarks/runs/{id}/artifacts/*`, `POST /api/index/rebuild`, `GET /api/ops/status`
+- **API readiness**: The endpoint list above is enforced by `EndpointAuthorizationMatrixTest` and compared in `EndpointDocumentationAlignmentTest`, so endpoint additions require explicit contract updates.
 
 For storefront behavior, read-only catalog/search endpoints are intentionally public (`/api/products`, `/api/categories`, `/api/search`, and `/api/reviews/products/{productId}`), while shopping, checkout, and operational actions remain authenticated.
 
