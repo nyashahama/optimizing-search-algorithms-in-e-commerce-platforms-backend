@@ -345,17 +345,17 @@ class EndpointAuthorizationMatrixTest {
                 """;
 
         return List.of(
-                new AuthorizationCase("GET", "/api/products", null, null, 401, 200, 200),
-                new AuthorizationCase("GET", "/api/products/1", null, null, 401, 200, 200),
-                new AuthorizationCase("GET", "/api/products/search?query=laptop", null, null, 401, 200, 200),
-                new AuthorizationCase("GET", "/api/products/autocomplete?prefix=lap", null, null, 401, 200, 200),
-                new AuthorizationCase("GET", "/api/products/category/1", null, null, 401, 200, 200),
-                new AuthorizationCase("GET", "/api/categories", null, null, 401, 200, 200),
-                new AuthorizationCase("GET", "/api/categories/1", null, null, 401, 200, 200),
-                new AuthorizationCase("GET", "/api/search?q=laptop", null, null, 401, 200, 200),
-                new AuthorizationCase("GET", "/api/search/compare?q=laptop", null, null, 401, 200, 200),
-                new AuthorizationCase("GET", "/api/search/autocomplete?q=lap", null, null, 401, 200, 200),
-                new AuthorizationCase("GET", "/api/reviews/products/1", null, null, 401, 200, 200),
+                new AuthorizationCase("GET", "/api/products", null, null, 200, 200, 200),
+                new AuthorizationCase("GET", "/api/products/1", null, null, 200, 200, 200),
+                new AuthorizationCase("GET", "/api/products/search?query=laptop", null, null, 200, 200, 200),
+                new AuthorizationCase("GET", "/api/products/autocomplete?prefix=lap", null, null, 200, 200, 200),
+                new AuthorizationCase("GET", "/api/products/category/1", null, null, 200, 200, 200),
+                new AuthorizationCase("GET", "/api/categories", null, null, 200, 200, 200),
+                new AuthorizationCase("GET", "/api/categories/1", null, null, 200, 200, 200),
+                new AuthorizationCase("GET", "/api/search?q=laptop", null, null, 200, 200, 200),
+                new AuthorizationCase("GET", "/api/search/compare?q=laptop", null, null, 200, 200, 200),
+                new AuthorizationCase("GET", "/api/search/autocomplete?q=lap", null, null, 200, 200, 200),
+                new AuthorizationCase("GET", "/api/reviews/products/1", null, null, 200, 200, 200),
                 new AuthorizationCase("POST", "/api/reviews", """
                         {"productId":1,"rating":5,"comment":"good"}
                         """, null, 401, 200, 200),
