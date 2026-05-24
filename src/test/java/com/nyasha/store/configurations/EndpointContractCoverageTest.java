@@ -1,6 +1,7 @@
 package com.nyasha.store.configurations;
 
 import com.nyasha.store.benchmark.controllers.BenchmarkController;
+import com.nyasha.store.benchmark.services.BenchmarkService;
 import com.nyasha.store.controllers.AddressController;
 import com.nyasha.store.controllers.CartController;
 import com.nyasha.store.controllers.CategoryController;
@@ -16,10 +17,28 @@ import com.nyasha.store.controllers.SearchController;
 import com.nyasha.store.controllers.SupplierController;
 import com.nyasha.store.controllers.UserController;
 import com.nyasha.store.controllers.WishlistController;
+import com.nyasha.store.indexing.IndexManagementService;
 import com.nyasha.store.observability.OperationsController;
+import com.nyasha.store.observability.OperationalStatusService;
+import com.nyasha.store.search.ProductSearchService;
+import com.nyasha.store.indexing.SearchIndexSyncService;
+import com.nyasha.store.services.AddressService;
+import com.nyasha.store.services.CartService;
+import com.nyasha.store.services.CategoryService;
+import com.nyasha.store.services.CheckoutService;
+import com.nyasha.store.services.InventoryService;
+import com.nyasha.store.services.OrderService;
+import com.nyasha.store.services.ProductService;
+import com.nyasha.store.services.ReturnService;
+import com.nyasha.store.services.ReviewService;
+import com.nyasha.store.services.SupplierService;
+import com.nyasha.store.services.UserService;
+import com.nyasha.store.services.WishlistService;
+import com.nyasha.store.services.payment.PaymentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
@@ -61,6 +80,60 @@ class EndpointContractCoverageTest {
     @Autowired
     private RequestMappingHandlerMapping handlerMapping;
 
+    @MockBean
+    private CartService cartService;
+
+    @MockBean
+    private CheckoutService checkoutService;
+
+    @MockBean
+    private OrderService orderService;
+
+    @MockBean
+    private ReturnService returnService;
+
+    @MockBean
+    private WishlistService wishlistService;
+
+    @MockBean
+    private ReviewService reviewService;
+
+    @MockBean
+    private InventoryService inventoryService;
+
+    @MockBean
+    private SupplierService supplierService;
+
+    @MockBean
+    private PaymentService paymentService;
+
+    @MockBean
+    private UserService userService;
+
+    @MockBean
+    private AddressService addressService;
+
+    @MockBean
+    private ProductService productService;
+
+    @MockBean
+    private CategoryService categoryService;
+
+    @MockBean
+    private ProductSearchService productSearchService;
+
+    @MockBean
+    private SearchIndexSyncService searchIndexSyncService;
+
+    @MockBean
+    private BenchmarkService benchmarkService;
+
+    @MockBean
+    private IndexManagementService indexManagementService;
+
+    @MockBean
+    private OperationalStatusService operationalStatusService;
+
     @Test
     void everyDocumentedEndpointIsBoundToAControllerAndAllControllersAreDocumented() {
         Set<String> configuredEndpoints = normalizedConfiguredRoutes();
@@ -96,8 +169,13 @@ class EndpointContractCoverageTest {
 
     private Set<String> normalizedMatrixEndpoints() {
         return EndpointAuthorizationMatrixTest.endpointMatrix().stream()
-                .map(entry -> canonicalRoute(entry.method(), entry.path()))
+                .map(entry -> canonicalRoute(entry.method(), normalizeMatrixPath(entry.path())))
                 .collect(Collectors.toSet());
+    }
+
+    private static String normalizeMatrixPath(String path) {
+        int questionMarkIndex = path.indexOf('?');
+        return questionMarkIndex < 0 ? path : path.substring(0, questionMarkIndex);
     }
 
     private boolean isEcommerceApiController(HandlerMethod handlerMethod) {
