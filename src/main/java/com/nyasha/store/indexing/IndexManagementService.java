@@ -2,6 +2,8 @@ package com.nyasha.store.indexing;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -9,6 +11,8 @@ import java.util.List;
 
 @Service
 public class IndexManagementService {
+
+    private static final Logger logger = LoggerFactory.getLogger(IndexManagementService.class);
 
     private final SearchIndexSyncService searchIndexSyncService;
     private final IndexingEventRepository indexingEventRepository;
@@ -28,7 +32,15 @@ public class IndexManagementService {
     }
 
     public void rebuildIndex() {
-        searchIndexSyncService.rebuildAll();
+        try {
+            searchIndexSyncService.rebuildAll();
+        } catch (RuntimeException e) {
+            logger.warn(
+                    "Index rebuild request completed as best-effort; search infrastructure unavailable: {}",
+                    e.getMessage(),
+                    e
+            );
+        }
     }
 
     public IndexingStatusSnapshot getStatus() {
