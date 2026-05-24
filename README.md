@@ -1,15 +1,41 @@
-# E-commerce Search Optimization Backend
+# E-commerce Commerce Backend + Search Optimization Platform
 
-This project is being rebuilt into a production-style search benchmarking lab using e-commerce catalog data.
+This repository is a production-style commerce backend with catalog, shopping cart, checkout, order, payment, supplier, and inventory workflows plus a benchmark harness for search and indexing experiments.
+
+The goal is to keep the project practical for teams that need a working starter for e-commerce operations:
+
+- **Catalog and discovery**: products, categories, suppliers, and multi-engine search.
+- **Commerce operations**: cart lifecycle, checkout with idempotent confirm, orders, returns, reviews, and wishlist.
+- **Fulfillment support**: inventory validation and stock movement for checkout and returns.
+- **Operational confidence**: benchmark scheduling and artifact generation, request correlation IDs, and dependency health reporting.
 
 ## Goal
 
-Compare search approaches across latency, indexing throughput, freshness, and relevance:
+Run a practical comparison of search engines while keeping the platform realistic for shipping commerce workflows.
+
+Primary outcomes:
+
+1. Compare search approaches across latency, indexing throughput, freshness, and relevance:
 
 1. SQL LIKE
 2. PostgreSQL full-text search
 3. Custom in-memory inverted index
 4. OpenSearch BM25
+
+2. Keep endpoint behavior consistent and auditable across all e-commerce surfaces (auth, request shape, and status semantics).
+
+## Endpoints by Domain
+
+- **Authentication and accounts**: `POST /users/register`, `POST /users/login`, `GET/PUT/DELETE /users`
+- **Catalog and search**: `GET /api/products`, `GET /api/products/{id}`, `POST/PUT/DELETE /api/products`, `GET /api/categories`, `GET /api/search`, `GET /api/search/compare`
+- **Cart and wishlist**: `GET /api/carts/me`, `POST /api/carts/me/items`, `PATCH /api/carts/me/items/{itemId}`, `DELETE /api/carts/me/items/{itemId}`, `DELETE /api/carts/me`
+- **Checkout and orders**: `POST /api/checkouts/preview`, `POST /api/checkouts/confirm`, `GET /api/orders/me`, `POST /api/orders/{id}/pack|ship|delivered|cancel`
+- **Returns and reviews**: `POST /api/returns/{orderId}`, `POST /api/returns/{returnId}/approve|reject|refund`, `POST /api/reviews`, `GET /api/reviews/products/{productId}`
+- **Inventory and suppliers**: `GET /api/inventory/{productId}`, `PUT /api/inventory/{productId}`, `PATCH /api/inventory/{productId}/adjust`, `GET /api/inventory/low-stock`, `GET /api/suppliers`
+- **Payments and addresses**: `GET /api/payments/orders/{orderId}`, `POST /api/payments/orders/{orderId}/capture|refund`, `POST/GET/PUT/DELETE /api/addresses/me`
+- **Benchmark and operations**: `POST /api/benchmarks/runs`, `GET /api/benchmarks/runs/{id}`, `GET /api/benchmarks/runs/{id}/artifacts/*`, `POST /api/index/rebuild`, `GET /api/ops/status`
+
+For storefront behavior, read-only catalog/search endpoints are intentionally public (`/api/products`, `/api/categories`, `/api/search`, and `/api/reviews/products/{productId}`), while shopping, checkout, and operational actions remain authenticated.
 
 ## Project Status
 

@@ -51,6 +51,18 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/products",
+                                "/api/products/*",
+                                "/api/products/search",
+                                "/api/products/autocomplete",
+                                "/api/products/category/**",
+                                "/api/categories",
+                                "/api/categories/*",
+                                "/api/search",
+                                "/api/search/**",
+                                "/api/reviews/products/**"
+                        ).permitAll()
                         .requestMatchers("/api/ops/status").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/users/register", "/users/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/carts/**").hasAnyRole("USER", "ADMIN")
@@ -91,10 +103,15 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/users/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/users/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/users/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/products/**", "/api/categories/**", "/api/addresses/**").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/addresses/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/products/**", "/api/categories/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/products/**", "/api/categories/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/products/**", "/api/categories/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/benchmarks/runs").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/benchmarks/runs").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/benchmarks/runs/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/index/rebuild").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/index/status").hasRole("ADMIN")
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
@@ -119,7 +136,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:4200"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
 
