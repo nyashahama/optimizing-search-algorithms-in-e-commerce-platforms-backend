@@ -301,13 +301,13 @@ class RealWorldEndpointBehaviorIT {
 
         assertThat(updatedSupplier.path("name").asText()).isEqualTo(updatedSupplierName);
 
-        Supplier supplier = supplierRepository.findById(supplierId).orElseThrow();
+        Supplier supplierEntity = supplierRepository.findById(supplierId).orElseThrow();
         Product linkedProduct = seedProduct(
                 "Supplier Bound Product " + marker,
                 "SP-" + UUID.randomUUID(),
                 120.0,
                 null,
-                supplier
+                supplierEntity
         );
         seedInventory(linkedProduct, 4);
 
@@ -321,9 +321,10 @@ class RealWorldEndpointBehaviorIT {
                                   "address":"%s"
                                 }
                                 """.formatted("Orphan " + marker, "ops@" + marker + ".test", "456 Side St")
+                        )
                 )
                 .andExpect(status().isCreated())
-                .andReturn());
+                .andReturn();
 
         long orphanSupplierId = readTree(orphanSupplierCreate).path("supplierId").asLong();
         assertThat(orphanSupplierId).isPositive();
@@ -401,7 +402,14 @@ class RealWorldEndpointBehaviorIT {
         checkoutPreview(buyerEmail, buyerPassword, addressId);
 
         String confirmIdempotencyKey = "order-lifecycle-" + UUID.randomUUID();
-        JsonNode confirmation = confirmCheckout(buyerEmail, buyerPassword, addressId, confirmIdempotencyKey);
+        JsonNode confirmation = confirmCheckout(
+                buyerEmail,
+                buyerPassword,
+                addressId,
+                confirmIdempotencyKey,
+                0.0,
+                0.0
+        );
         long orderId = confirmation.path("orderId").asLong();
         assertThat(orderId).isPositive();
         assertThat(confirmation.path("orderStatus").asText()).isEqualTo("PAID");
@@ -450,7 +458,7 @@ class RealWorldEndpointBehaviorIT {
                                 {"orderItemId":%d,"reason":"defect"}
                                 """.formatted(orderItemId)))
                 .andExpect(status().isOk())
-                .andReturn());
+                .andReturn();
         long returnId = readTree(returnCreate).path("returnId").asLong();
         assertThat(returnId).isPositive();
 
@@ -470,7 +478,7 @@ class RealWorldEndpointBehaviorIT {
         String refundKey = "refund-" + UUID.randomUUID();
         JsonNode refunded = readTree(mockMvc.perform(post("/api/returns/{returnId}/refund", returnId)
                         .with(httpBasic(buyerEmail, buyerPassword))
-                        .header("Idempotency-Key", refundKey)))
+                        .header("Idempotency-Key", refundKey))
                 .andExpect(status().isOk())
                 .andReturn());
 
@@ -696,6 +704,24 @@ class RealWorldEndpointBehaviorIT {
                                 .header("Idempotency-Key", idempotencyKey)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{\"shippingAddressId\":%d,\"paymentMethod\":\"SIMULATED\"}".formatted(addressId))
+                )
+                .andExpect(status().isOk())
+                .andReturn();
+        return readTree(response);
+    }
+
+    private JsonNode confirmCheckout(String email, String password, long addressId, String idempotencyKey, Double shippingCost, Double taxRate) throws Exception {
+        String body = (shippingCost == null && taxRate == null)
+                ? "{\"shippingAddressId\":%d,\"paymentMethod\":\"SIMULATED\"}".formatted(addressId)
+                : "{\"shippingAddressId\":%d,\"paymentMethod\":\"SIMULATED\",\"shippingCost\":%s,\"taxRate\":%s}"
+                        .formatted(addressId, shippingCost, taxRate);
+
+        MvcResult response = mockMvc.perform(
+                        post("/api/checkouts/confirm")
+                                .with(httpBasic(email, password))
+                                .header("Idempotency-Key", idempotencyKey)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body)
                 )
                 .andExpect(status().isOk())
                 .andReturn();
