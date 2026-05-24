@@ -78,11 +78,13 @@ This backend is built as an adoptable commerce API backbone with executable endp
 - `EndpointAuthorizationMatrixTest` covers route-level authentication and authorization expectations for all ecommerce endpoints.
 - `EndpointContractCoverageTest` enforces that route definitions in controllers and the matrix stay in lockstep.
 - `CommerceFlowSmokeIT` validates a real-commerce user journey that spans catalog, cart, checkout, order, and search comparison.
+- `OperationsReadinessEndpointTest` verifies operational endpoint behavior (`/actuator/health`, `/actuator/info`, and admin-only metrics endpoints).
 
 Use this check when accepting endpoint changes:
 
 ```bash
 ./mvnw test -Dtest=EndpointAuthorizationMatrixTest,EndpointContractCoverageTest
+./mvnw test -Dtest=OperationsReadinessEndpointTest
 ```
 
 ## Tech Stack
