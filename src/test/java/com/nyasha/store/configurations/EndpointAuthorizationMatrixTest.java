@@ -203,7 +203,7 @@ class EndpointAuthorizationMatrixTest {
 
         when(inventoryService.lowStock()).thenReturn(List.of(new Inventory()));
         when(inventoryService.getInventory(anyLong(), anyLong())).thenReturn(new Inventory());
-        when(inventoryService.upsert(anyLong(), anyLong(), anyInt(), anyString(), anyString()))
+        when(inventoryService.upsert(anyLong(), anyLong(), anyInt(), anyString(), any(Integer.class)))
                 .thenReturn(new Inventory());
         when(inventoryService.adjust(anyLong(), anyLong(), anyInt())).thenReturn(new Inventory());
 
