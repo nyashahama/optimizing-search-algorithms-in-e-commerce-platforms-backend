@@ -71,6 +71,12 @@ This backend is built as an adoptable commerce API backbone with executable endp
 - `OperationsReadinessEndpointTest` verifies operational endpoint behavior (`/actuator/health`, `/actuator/info`, and admin-only metrics endpoints).
 - `*ControllerTest` now covers additional ecommerce controller surfaces (catalog, search, wishlist, returns, checkout, index rebuild, and benchmark artifact endpoints) with direct service-delegation assertions.
 
+### Frontend interoperability
+
+The platform is prepared for browser/front-end integrations:
+- CORS is enabled for common local storefront ports (`3000`, `4200`).
+- `PATCH` is explicitly allowed for browser pre-flights, so line-item updates (for carts/inventory) can be called from SPAs without custom gateway overrides.
+
 Use this check when accepting endpoint changes:
 
 ```bash
