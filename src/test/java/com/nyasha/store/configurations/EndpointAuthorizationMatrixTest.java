@@ -374,7 +374,7 @@ class EndpointAuthorizationMatrixTest {
 
                 new AuthorizationCase("GET", "/api/payments/orders/1", null, null, 401, 200, 200),
                 new AuthorizationCase("POST", "/api/payments/orders/1/capture", null, null, 401, 403, 200),
-                new AuthorizationCase("POST", "/api/payments/orders/1/refund", "{\"amount\":10.0}", null, 401, 200, 200),
+                new AuthorizationCase("POST", "/api/payments/orders/1/refund", "{\"amount\":10.0}", null, 401, 403, 200),
 
                 new AuthorizationCase("GET", "/api/inventory/low-stock", null, null, 401, 403, 200),
                 new AuthorizationCase("GET", "/api/inventory/1", null, null, 401, 200, 200),
@@ -437,12 +437,18 @@ class EndpointAuthorizationMatrixTest {
                 new AuthorizationCase("DELETE", "/api/categories/1", null, null, 401, 403, 204),
 
                 new AuthorizationCase("POST", "/api/benchmarks/runs", null, null, 401, 403, 202),
+                new AuthorizationCase("GET", "/api/benchmarks/runs", null, null, 401, 403, 200),
                 new AuthorizationCase("GET", "/api/benchmarks/runs/1", null, null, 401, 403, 200),
                 new AuthorizationCase("GET", "/api/benchmarks/runs/1/results", null, null, 401, 403, 200),
                 new AuthorizationCase("GET", "/api/benchmarks/runs/1/artifacts/summary.md", null, null, 401, 403, 200),
                 new AuthorizationCase("GET", "/api/benchmarks/runs/1/artifacts/results.json", null, null, 401, 403, 200),
                 new AuthorizationCase("GET", "/api/benchmarks/runs/1/artifacts/latency.csv", null, null, 401, 403, 200),
                 new AuthorizationCase("GET", "/api/benchmarks/runs/1/artifacts/relevance.csv", null, null, 401, 403, 200),
+                new AuthorizationCase("GET", "/api/benchmarks/runs/1/report.md", null, null, 401, 403, 200),
+                new AuthorizationCase("GET", "/api/benchmarks/runs/1/report.json", null, null, 401, 403, 200),
+                new AuthorizationCase("GET", "/api/benchmarks/runs/1/latency.csv", null, null, 401, 403, 200),
+                new AuthorizationCase("GET", "/api/benchmarks/runs/1/relevance.csv", null, null, 401, 403, 200),
+                new AuthorizationCase("GET", "/api/benchmarks/runs/1/artifacts/missing.csv", null, null, 401, 403, 400),
                 new AuthorizationCase("POST", "/api/index/rebuild", null, null, 401, 403, 202),
                 new AuthorizationCase("GET", "/api/index/status", null, null, 401, 403, 200),
                 new AuthorizationCase("GET", "/api/ops/status", null, null, 401, 403, 200)
