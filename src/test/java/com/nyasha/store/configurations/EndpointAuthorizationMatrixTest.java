@@ -40,6 +40,9 @@ import com.nyasha.store.search.ProductSearchService;
 import com.nyasha.store.search.SearchCompareResponse;
 import com.nyasha.store.search.SearchEngineType;
 import com.nyasha.store.search.SearchResult;
+import com.nyasha.store.dtos.checkout.CheckoutLineItemResponse;
+import com.nyasha.store.dtos.checkout.CheckoutConfirmResponse;
+import com.nyasha.store.dtos.checkout.CheckoutPreviewResponse;
 import com.nyasha.store.services.AddressService;
 import com.nyasha.store.services.CartService;
 import com.nyasha.store.services.CategoryService;
@@ -270,8 +273,9 @@ class EndpointAuthorizationMatrixTest {
                 .thenReturn(new SearchCompareResponse("query", 20, List.of(sampleSearchResult)));
         when(searchIndexSyncService.suggest(anyString(), anyInt())).thenReturn(List.of("suggestion"));
 
-        when(checkoutService.preview(anyLong(), any())).thenReturn(null);
-        when(checkoutService.confirm(anyLong(), any(), anyString())).thenReturn(null);
+        CheckoutPreviewResponse checkoutPreview = sampleCheckoutPreviewResponse();
+        when(checkoutService.preview(anyLong(), any())).thenReturn(checkoutPreview);
+        when(checkoutService.confirm(anyLong(), any(), anyString())).thenReturn(sampleCheckoutConfirmResponse(checkoutPreview));
 
         Path reportRoot = Files.createTempDirectory("benchmark-reports");
         when(benchmarkService.startRun(anyLong(), anyInt())).thenReturn(new com.nyasha.store.benchmark.dtos.BenchmarkRunResponse(1L, "QUEUED", 1));
@@ -548,6 +552,35 @@ class EndpointAuthorizationMatrixTest {
         product.setSku("SKU-1");
         product.setBasePrice(9.99);
         return product;
+    }
+
+    private static CheckoutLineItemResponse sampleCheckoutLineItem() {
+        return new CheckoutLineItemResponse(1L, null, "Demo Product", 1, 9.99, 9.99);
+    }
+
+    private static CheckoutPreviewResponse sampleCheckoutPreviewResponse() {
+        return new CheckoutPreviewResponse(
+                19.98,
+                0.0,
+                4.99,
+                1.6,
+                26.57,
+                List.of(sampleCheckoutLineItem())
+        );
+    }
+
+    private static CheckoutConfirmResponse sampleCheckoutConfirmResponse(CheckoutPreviewResponse preview) {
+        return new CheckoutConfirmResponse(
+                2001L,
+                "PAID",
+                preview.subtotal(),
+                preview.discountAmount(),
+                preview.shippingAmount(),
+                preview.taxAmount(),
+                preview.totalAmount(),
+                "CAPTURED",
+                preview.items()
+        );
     }
 
     private static BenchmarkRunSummaryDto sampleRunSummary() {
