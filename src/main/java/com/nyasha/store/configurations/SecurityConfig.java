@@ -1,6 +1,7 @@
 package com.nyasha.store.configurations;
 
 import com.nyasha.store.security.ApiRateLimitFilter;
+import com.nyasha.store.observability.RequestIdFilter;
 import jakarta.servlet.Filter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -50,6 +51,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/api/ops/status").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/users/register", "/users/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/carts/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/carts/**").hasAnyRole("USER", "ADMIN")
@@ -97,6 +99,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(rateLimitFilter(), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(requestIdFilter(), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
                 .httpBasic(withDefaults());
 
         return http.build();
@@ -105,6 +108,11 @@ public class SecurityConfig {
     @Bean
     public Filter rateLimitFilter() {
         return new ApiRateLimitFilter(rateLimitEnabled, rateLimitRequestsPerMinute, rateLimitWindowMs, java.time.Clock.systemUTC());
+    }
+
+    @Bean
+    public Filter requestIdFilter() {
+        return new RequestIdFilter();
     }
 
     @Bean

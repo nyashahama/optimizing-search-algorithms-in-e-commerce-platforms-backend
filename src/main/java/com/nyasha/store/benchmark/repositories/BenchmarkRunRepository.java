@@ -14,4 +14,6 @@ public interface BenchmarkRunRepository extends JpaRepository<BenchmarkRun, Long
     Optional<BenchmarkRun> findById(Long id);
 
     List<BenchmarkRun> findByStatusOrderByStartedAtDesc(BenchmarkRunStatus status);
+
+    long countByStatus(BenchmarkRunStatus status);
 }
