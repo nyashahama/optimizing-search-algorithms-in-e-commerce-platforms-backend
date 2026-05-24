@@ -632,7 +632,8 @@ class EndpointAuthorizationMatrixTest {
             int adminStatus
     ) {
         private static final Set<String> EMPTY_RESPONSE_SUCCESS_PATHS = Set.of(
-                "POST /api/index/rebuild"
+                "POST /api/index/rebuild",
+                "POST /api/benchmarks/runs"
         );
 
         public boolean shouldAllowEmptyBody() {
