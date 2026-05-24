@@ -12,6 +12,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 class SearchControllerTest {
@@ -36,5 +37,14 @@ class SearchControllerTest {
         assertThat(search.query()).isEqualTo("wireless");
         assertThat(compare).isSameAs(compareResponse);
         assertThat(suggestions).containsExactly("wireless", "wiring");
+    }
+
+    @Test
+    void autocompleteReturnsEmptyListWhenSearchBackendIsUnavailable() {
+        doThrow(new IllegalStateException("OpenSearch unavailable")).when(searchIndexSyncService).suggest("wire", 5);
+
+        List<String> suggestions = searchController.autocomplete("wire", 5).getBody();
+
+        assertThat(suggestions).isEmpty();
     }
 }

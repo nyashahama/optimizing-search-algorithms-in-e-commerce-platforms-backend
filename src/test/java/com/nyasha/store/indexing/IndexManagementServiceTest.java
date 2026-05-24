@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,6 +49,16 @@ class IndexManagementServiceTest {
 
     @Test
     void rebuildIndexDelegatesToSyncService() {
+        IndexManagementService service = new IndexManagementService(searchIndexSyncService, indexingEventRepository, 50L, 120000L);
+
+        service.rebuildIndex();
+
+        verify(searchIndexSyncService).rebuildAll();
+    }
+
+    @Test
+    void rebuildIndexSkipsFailureWhenSearchBackendIsUnavailable() {
+        doThrow(new IllegalStateException("OpenSearch unavailable")).when(searchIndexSyncService).rebuildAll();
         IndexManagementService service = new IndexManagementService(searchIndexSyncService, indexingEventRepository, 50L, 120000L);
 
         service.rebuildIndex();
