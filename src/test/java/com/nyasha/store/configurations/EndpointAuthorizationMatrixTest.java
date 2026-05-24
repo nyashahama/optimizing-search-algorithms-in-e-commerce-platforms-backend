@@ -211,10 +211,10 @@ class EndpointAuthorizationMatrixTest {
         when(paymentService.refundPayment(anyLong(), anyDouble())).thenReturn(samplePayment());
 
         when(inventoryService.lowStock()).thenReturn(List.of(new Inventory()));
-        when(inventoryService.getInventory(anyLong(), anyLong())).thenReturn(new Inventory());
-        when(inventoryService.upsert(anyLong(), anyLong(), anyInt(), anyString(), any(Integer.class)))
+        when(inventoryService.getInventory(anyLong(), any())).thenReturn(new Inventory());
+        when(inventoryService.upsert(anyLong(), any(), anyInt(), anyString(), any(Integer.class)))
                 .thenReturn(new Inventory());
-        when(inventoryService.adjust(anyLong(), anyLong(), anyInt())).thenReturn(new Inventory());
+        when(inventoryService.adjust(anyLong(), any(), anyInt())).thenReturn(new Inventory());
 
         when(supplierService.getSuppliers()).thenReturn(List.of(new Supplier()));
         when(supplierService.getSupplier(anyLong())).thenReturn(new Supplier());
@@ -474,23 +474,27 @@ class EndpointAuthorizationMatrixTest {
         MvcResult result = mockMvc.perform(requestFor(authorizationCase).with(user(USER_EMAIL).roles("USER")))
                 .andReturn();
         assertThat(result.getResponse().getStatus()).isEqualTo(authorizationCase.userStatus());
-        assertSuccessfulAuthorizedResponse(result, authorizationCase.userStatus());
+        assertSuccessfulAuthorizedResponse(authorizationCase, result, authorizationCase.userStatus());
     }
 
     private void assertAdmin(AuthorizationCase authorizationCase) throws Exception {
         MvcResult result = mockMvc.perform(requestFor(authorizationCase).with(user(ADMIN_EMAIL).roles("ADMIN")))
                 .andReturn();
         assertThat(result.getResponse().getStatus()).isEqualTo(authorizationCase.adminStatus());
-        assertSuccessfulAuthorizedResponse(result, authorizationCase.adminStatus());
+        assertSuccessfulAuthorizedResponse(authorizationCase, result, authorizationCase.adminStatus());
     }
 
-    private void assertSuccessfulAuthorizedResponse(MvcResult result, int status) {
-        if (status == 204) {
+    private void assertSuccessfulAuthorizedResponse(AuthorizationCase authorizationCase, MvcResult result, int status) {
+        if (status == 204 || status == 202) {
             return;
         }
         if (status >= 200 && status < 300) {
             String payload = new String(result.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8);
-            assertThat(payload).isNotBlank();
+            assertThat(payload)
+                    .as("Expected non-blank response body for %s %s".formatted(
+                            authorizationCase.method(), authorizationCase.path())
+                    )
+                    .isNotBlank();
             assertThat(result.getResponse().getContentType()).isNotNull();
         }
     }
