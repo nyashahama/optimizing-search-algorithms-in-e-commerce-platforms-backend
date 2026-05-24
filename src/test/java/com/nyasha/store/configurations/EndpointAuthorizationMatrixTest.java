@@ -107,7 +107,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         BenchmarkController.class,
         OperationsController.class,
         IndexController.class
-}, properties = {"spring.security.user.name=test-user", "spring.security.user.password=test-password"})
+}, properties = {
+        "spring.security.user.name=test-user",
+        "spring.security.user.password=test-password",
+        "security.rate-limit.enabled=false"
+})
 @Import(SecurityConfig.class)
 class EndpointAuthorizationMatrixTest {
 
