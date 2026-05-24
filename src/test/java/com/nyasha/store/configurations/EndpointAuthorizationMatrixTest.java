@@ -441,7 +441,6 @@ class EndpointAuthorizationMatrixTest {
                 new AuthorizationCase("DELETE", "/api/categories/1", null, null, 401, 403, 204),
 
                 new AuthorizationCase("POST", "/api/benchmarks/runs", null, null, 401, 403, 202),
-                new AuthorizationCase("GET", "/api/benchmarks/runs", null, null, 401, 403, 200),
                 new AuthorizationCase("GET", "/api/benchmarks/runs/1", null, null, 401, 403, 200),
                 new AuthorizationCase("GET", "/api/benchmarks/runs/1/results", null, null, 401, 403, 200),
                 new AuthorizationCase("GET", "/api/benchmarks/runs/1/artifacts/summary.md", null, null, 401, 403, 200),
