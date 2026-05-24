@@ -413,7 +413,7 @@ class EndpointAuthorizationMatrixTest {
                 new AuthorizationCase("GET", "/api/addresses/me/1", null, null, 401, 200, 200),
                 new AuthorizationCase("POST", "/api/addresses/me", """
                         {"street":"1 Commerce","city":"Metro","country":"Country"}
-                        """, null, 401, 200, 200),
+                        """, null, 401, 201, 201),
                 new AuthorizationCase("PUT", "/api/addresses/me/1", """
                         {"street":"1 Commerce","city":"Metro","country":"Country"}
                         """, null, 401, 200, 200),
