@@ -71,6 +71,20 @@ Phase 0 made the existing Spring Boot backend buildable, testable, documented, a
 | Phase 6 | Commerce Operations Hardening | Complete |
 | Phase 7 | Observability And Operational Playbooks | Complete |
 
+## Ecommerce API Readiness Controls
+
+This backend is built as an adoptable commerce API backbone with executable endpoint guarantees:
+
+- `EndpointAuthorizationMatrixTest` covers route-level authentication and authorization expectations for all ecommerce endpoints.
+- `EndpointContractCoverageTest` enforces that route definitions in controllers and the matrix stay in lockstep.
+- `CommerceFlowSmokeIT` validates a real-commerce user journey that spans catalog, cart, checkout, order, and search comparison.
+
+Use this check when accepting endpoint changes:
+
+```bash
+./mvnw test -Dtest=EndpointAuthorizationMatrixTest,EndpointContractCoverageTest
+```
+
 ## Tech Stack
 
 - Java 21

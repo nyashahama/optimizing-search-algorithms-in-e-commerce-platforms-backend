@@ -65,6 +65,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.io.IOException;
@@ -87,7 +88,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.assertj.core.api.Assertions.assertThat;
 
 @WebMvcTest(controllers = {
         CartController.class,
@@ -327,7 +328,7 @@ class EndpointAuthorizationMatrixTest {
         }
     }
 
-    private static List<AuthorizationCase> endpointMatrix() {
+    static List<AuthorizationCase> endpointMatrix() {
         String productBody = """
                 {"name":"Demo","sku":"D-1","basePrice":9.99}
                 """;
@@ -459,18 +460,34 @@ class EndpointAuthorizationMatrixTest {
     }
 
     private void assertUnauthorized(AuthorizationCase authorizationCase) throws Exception {
-        mockMvc.perform(requestFor(authorizationCase))
-                .andExpect(status().is(authorizationCase.unauthorizedStatus()));
+        MvcResult result = mockMvc.perform(requestFor(authorizationCase))
+                .andReturn();
+        assertThat(result.getResponse().getStatus()).isEqualTo(authorizationCase.unauthorizedStatus());
     }
 
     private void assertUser(AuthorizationCase authorizationCase) throws Exception {
-        mockMvc.perform(requestFor(authorizationCase).with(user(USER_EMAIL).roles("USER")))
-                .andExpect(status().is(authorizationCase.userStatus()));
+        MvcResult result = mockMvc.perform(requestFor(authorizationCase).with(user(USER_EMAIL).roles("USER")))
+                .andReturn();
+        assertThat(result.getResponse().getStatus()).isEqualTo(authorizationCase.userStatus());
+        assertSuccessfulAuthorizedResponse(result, authorizationCase.userStatus());
     }
 
     private void assertAdmin(AuthorizationCase authorizationCase) throws Exception {
-        mockMvc.perform(requestFor(authorizationCase).with(user(ADMIN_EMAIL).roles("ADMIN")))
-                .andExpect(status().is(authorizationCase.adminStatus()));
+        MvcResult result = mockMvc.perform(requestFor(authorizationCase).with(user(ADMIN_EMAIL).roles("ADMIN")))
+                .andReturn();
+        assertThat(result.getResponse().getStatus()).isEqualTo(authorizationCase.adminStatus());
+        assertSuccessfulAuthorizedResponse(result, authorizationCase.adminStatus());
+    }
+
+    private void assertSuccessfulAuthorizedResponse(MvcResult result, int status) {
+        if (status == 204) {
+            return;
+        }
+        if (status >= 200 && status < 300) {
+            String payload = result.getResponse().getContentAsString();
+            assertThat(payload).isNotBlank();
+            assertThat(result.getResponse().getContentType()).isNotNull();
+        }
     }
 
     private MockHttpServletRequestBuilder requestFor(AuthorizationCase authorizationCase) {
@@ -560,7 +577,7 @@ class EndpointAuthorizationMatrixTest {
         );
     }
 
-    private record AuthorizationCase(
+    record AuthorizationCase(
             String method,
             String path,
             String body,
