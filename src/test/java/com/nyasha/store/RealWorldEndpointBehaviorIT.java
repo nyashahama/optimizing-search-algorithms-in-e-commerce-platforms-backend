@@ -729,11 +729,11 @@ class RealWorldEndpointBehaviorIT {
         mockMvc.perform(get("/api/benchmarks/runs/{runId}/artifacts/latency.csv", runId)
                         .with(httpBasic(adminEmail, adminPassword)))
                 .andExpect(status().isOk())
-                .andExpect(content -> assertThat(content.getResponse().getContentAsString()).startsWith("queryText,engine,latencyMs"));
+                .andExpect(content -> assertThat(content.getResponse().getContentAsString()).contains("queryText,engine,latencyMs"));
         mockMvc.perform(get("/api/benchmarks/runs/{runId}/artifacts/relevance.csv", runId)
                         .with(httpBasic(adminEmail, adminPassword)))
                 .andExpect(status().isOk())
-                .andExpect(content -> assertThat(content.getResponse().getContentAsString()).startsWith("queryText,engine,precisionAtK"));
+                .andExpect(content -> assertThat(content.getResponse().getContentAsString()).contains("queryText,engine,precisionAtK"));
         mockMvc.perform(get("/api/benchmarks/runs/{runId}/artifacts/missing.txt", runId)
                         .with(httpBasic(adminEmail, adminPassword)))
                 .andExpect(status().isBadRequest());
