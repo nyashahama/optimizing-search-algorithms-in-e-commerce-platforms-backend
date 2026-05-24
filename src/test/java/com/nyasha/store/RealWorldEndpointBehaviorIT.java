@@ -115,6 +115,17 @@ class RealWorldEndpointBehaviorIT {
                 && result.path("products").isArray()
                 && result.path("products").size() > 0)).isTrue();
 
+        JsonNode productSearch = readTree(mockMvc.perform(get("/api/products/search").param("query", "Catalog"))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(productSearch.isArray()).isTrue();
+        assertThat(hasMatch(productSearch, item -> product.getName().equals(item.path("name").asText()))).isTrue();
+
+        JsonNode productAutocomplete = readTree(mockMvc.perform(get("/api/products/autocomplete").param("prefix", "Cat"))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(productAutocomplete.isArray()).isTrue();
+
         JsonNode productReviews = readTree(mockMvc.perform(get("/api/reviews/products/{productId}", product.getProductId()))
                 .andExpect(status().isOk())
                 .andReturn());
@@ -386,6 +397,69 @@ class RealWorldEndpointBehaviorIT {
     }
 
     @Test
+    void adminCanRejectOrderReturns() throws Exception {
+        String buyerEmail = "buyer-" + UUID.randomUUID() + "@example.com";
+        String buyerPassword = randomPassword();
+        String adminEmail = "admin-" + UUID.randomUUID() + "@example.com";
+        String adminPassword = randomPassword();
+        seedAdminUser(adminEmail, adminPassword);
+
+        Product product = seedProduct("Return Candidate " + UUID.randomUUID(), "RC-" + UUID.randomUUID(), 79.99, null);
+        seedInventory(product, 8);
+
+        registerUser(buyerEmail, buyerPassword);
+        long addressId = createAddress(buyerEmail, buyerPassword);
+        addCartItem(buyerEmail, buyerPassword, product.getProductId(), 1);
+        confirmCheckout(buyerEmail, buyerPassword, addressId, "idempotency-" + UUID.randomUUID());
+
+        JsonNode order = readTree(mockMvc.perform(get("/api/orders/me")
+                        .with(httpBasic(buyerEmail, buyerPassword)))
+                .andExpect(status().isOk())
+                .andReturn())
+                .get(0);
+        long orderId = order.path("orderId").asLong();
+        long orderItemId = order.path("items").get(0).path("orderItemId").asLong();
+
+        JsonNode packed = readTree(mockMvc.perform(post("/api/orders/{id}/pack", orderId)
+                        .with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(packed.path("status").asText()).isEqualTo("PACKED");
+
+        mockMvc.perform(post("/api/orders/{id}/ship", orderId)
+                        .with(httpBasic(adminEmail, adminPassword))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"trackingNumber":"%s","carrier":"Fast Logistics"}
+                                """.formatted("TRACK-" + UUID.randomUUID())))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/orders/{id}/delivered", orderId)
+                        .with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk());
+
+        JsonNode returnCreate = mockMvc.perform(post("/api/returns/{orderId}", orderId)
+                        .with(httpBasic(buyerEmail, buyerPassword))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"orderItemId":%d,"reason":"wrong size"}
+                                """.formatted(orderItemId)))
+                .andExpect(status().isOk())
+                .andReturn();
+        long returnId = readTree(returnCreate).path("returnId").asLong();
+        assertThat(returnId).isPositive();
+
+        mockMvc.perform(post("/api/returns/{returnId}/reject", returnId).with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk());
+
+        JsonNode returnsAfterReject = readTree(mockMvc.perform(get("/api/returns/me").with(httpBasic(buyerEmail, buyerPassword)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(hasMatch(returnsAfterReject, entry -> entry.path("returnId").asLong() == returnId
+                && "REJECTED".equals(entry.path("status").asText()))).isTrue();
+    }
+
+    @Test
     void adminAndBuyerCanExecuteOrderReturnLifecycle() throws Exception {
         String buyerEmail = "buyer-" + UUID.randomUUID() + "@example.com";
         String buyerPassword = randomPassword();
@@ -504,6 +578,72 @@ class RealWorldEndpointBehaviorIT {
     }
 
     @Test
+    void adminCanCaptureAndRefundPaymentsForOrders() throws Exception {
+        String buyerEmail = "buyer-" + UUID.randomUUID() + "@example.com";
+        String buyerPassword = randomPassword();
+        String adminEmail = "admin-" + UUID.randomUUID() + "@example.com";
+        String adminPassword = randomPassword();
+        seedAdminUser(adminEmail, adminPassword);
+
+        Product product = seedProduct("Payment Ops Product " + UUID.randomUUID(), "PO-" + UUID.randomUUID(), 129.99, null);
+        seedInventory(product, 4);
+
+        registerUser(buyerEmail, buyerPassword);
+        long addressId = createAddress(buyerEmail, buyerPassword);
+        addCartItem(buyerEmail, buyerPassword, product.getProductId(), 1);
+        JsonNode confirmation = confirmCheckout(
+                buyerEmail,
+                buyerPassword,
+                addressId,
+                "capture-refund-" + UUID.randomUUID(),
+                0.0,
+                0.0
+        );
+        long orderId = confirmation.path("orderId").asLong();
+        assertThat(orderId).isPositive();
+
+        JsonNode capturedPayment = readTree(mockMvc.perform(post("/api/payments/orders/{orderId}/capture", orderId)
+                        .with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(capturedPayment.path("status").asText()).isEqualTo("CAPTURED");
+
+        mockMvc.perform(post("/api/payments/orders/{orderId}/capture", orderId).with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk());
+
+        JsonNode refundedPayment = readTree(mockMvc.perform(post("/api/payments/orders/{orderId}/refund", orderId)
+                        .with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(refundedPayment.path("status").asText()).isEqualTo("REFUNDED");
+
+        mockMvc.perform(post("/api/payments/orders/{orderId}/refund", orderId)
+                        .with(httpBasic(buyerEmail, buyerPassword)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void apiOperationsEndpointIsProtectedAndReturnsStatus() throws Exception {
+        String userEmail = "ops-user-" + UUID.randomUUID() + "@example.com";
+        String userPassword = randomPassword();
+        String adminEmail = "ops-admin-" + UUID.randomUUID() + "@example.com";
+        String adminPassword = randomPassword();
+
+        seedAdminUser(adminEmail, adminPassword);
+        registerUser(userEmail, userPassword);
+
+        mockMvc.perform(get("/api/ops/status"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/ops/status").with(httpBasic(userEmail, userPassword)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/ops/status").with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("overallStatus").isNotEmpty());
+    }
+
+    @Test
     void adminCanManageUsersAndRunBenchmarks() throws Exception {
         String adminEmail = "admin-" + UUID.randomUUID() + "@example.com";
         String adminPassword = randomPassword();
@@ -575,6 +715,28 @@ class RealWorldEndpointBehaviorIT {
                 .andExpect(status().isNoContent());
         mockMvc.perform(get("/users/{id}", targetUserId).with(httpBasic(adminEmail, adminPassword)))
                 .andExpect(status().isNotFound());
+
+        waitForBenchmarkRunCompletion(benchmarkStart.path("runId").asLong(), adminEmail, adminPassword);
+
+        mockMvc.perform(get("/api/benchmarks/runs/{runId}/artifacts/summary.md", runId)
+                        .with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk())
+                .andExpect(content -> assertThat(content.getResponse().getContentAsString()).contains("Run ID"));
+        mockMvc.perform(get("/api/benchmarks/runs/{runId}/artifacts/results.json", runId)
+                        .with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk())
+                .andExpect(content -> assertThat(content.getResponse().getContentAsString()).contains("\"status\""));
+        mockMvc.perform(get("/api/benchmarks/runs/{runId}/artifacts/latency.csv", runId)
+                        .with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk())
+                .andExpect(content -> assertThat(content.getResponse().getContentAsString()).startsWith("queryText,engine,latencyMs"));
+        mockMvc.perform(get("/api/benchmarks/runs/{runId}/artifacts/relevance.csv", runId)
+                        .with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk())
+                .andExpect(content -> assertThat(content.getResponse().getContentAsString()).startsWith("queryText,engine,precisionAtK"));
+        mockMvc.perform(get("/api/benchmarks/runs/{runId}/artifacts/missing.txt", runId)
+                        .with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isBadRequest());
     }
 
     private Category seedCategory(String name) {
@@ -751,5 +913,27 @@ class RealWorldEndpointBehaviorIT {
 
     private String randomPassword() {
         return "pw-" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    private void waitForBenchmarkRunCompletion(long runId, String adminEmail, String adminPassword) throws Exception {
+        int attempts = 0;
+        while (attempts < 40) {
+            attempts++;
+            JsonNode run = readTree(mockMvc.perform(get("/api/benchmarks/runs/{runId}", runId)
+                            .with(httpBasic(adminEmail, adminPassword)))
+                    .andExpect(status().isOk())
+                    .andReturn());
+
+            String status = run.path("status").asText();
+            if ("COMPLETED".equals(status)) {
+                return;
+            }
+            if ("FAILED".equals(status)) {
+                throw new IllegalStateException("Benchmark run failed while waiting for completion: " + runId);
+            }
+
+            Thread.sleep(250L);
+        }
+        throw new IllegalStateException("Timed out waiting for benchmark completion: " + runId);
     }
 }
