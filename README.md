@@ -129,6 +129,12 @@ Expected: Java 21.
 ./mvnw test
 ```
 
+If you cannot run Maven locally (or JAVA_HOME is not configured), use the repo helper:
+
+```bash
+./scripts/verify-endpoint-readiness.sh
+```
+
 ## Search API
 
 - `GET /api/search?q=wireless&engine=in_memory&limit=20` runs a single search engine.
