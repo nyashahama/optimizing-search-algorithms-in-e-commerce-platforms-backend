@@ -9,6 +9,8 @@ import lombok.Data;
 @Data
 public class BenchmarkResult {
 
+    public static final int ERROR_MESSAGE_LIMIT = 1024;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -36,6 +38,7 @@ public class BenchmarkResult {
     private Double mrrAtK;
     private Double ndcgAtK;
 
+    @Column(length = ERROR_MESSAGE_LIMIT)
     private String errorMessage;
 
     public boolean isSupported() {

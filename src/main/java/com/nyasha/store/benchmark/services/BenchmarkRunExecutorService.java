@@ -105,7 +105,7 @@ public class BenchmarkRunExecutorService {
             for (BenchmarkQuery query : sortedQueries) {
                 String queryText = query.getQueryText();
                 for (SearchEngineType engine : SearchEngineType.values()) {
-                    SearchResult result = productSearchService.search(engine.canonical(), queryText, normalizedLimit);
+                    SearchResult result = safeSearch(run, queryText, normalizedLimit, engine);
                     BenchmarkResult benchmarkResult = mapResult(run, queryText, result, engine);
                     attachRelevanceMetrics(benchmarkResult, querySet, queryText);
                     resultRepository.save(benchmarkResult);
@@ -131,7 +131,19 @@ public class BenchmarkRunExecutorService {
             run.setDurationMs(toMs(System.nanoTime() - startedAtNanos));
             runRepository.save(run);
             logger.error("Benchmark run {} failed", run.getId(), e);
-            throw e;
+        }
+    }
+
+    private SearchResult safeSearch(BenchmarkRun run, String queryText, int limit, SearchEngineType engine) {
+        try {
+            return productSearchService.search(engine.canonical(), queryText, limit);
+        } catch (Exception e) {
+            logger.warn("Benchmark run {} search failed for engine {} and query '{}'",
+                    run.getId(),
+                    engine,
+                    queryText,
+                    e);
+            return SearchResult.unsupported(engine, "Search execution failed: " + e.getMessage());
         }
     }
 
@@ -150,9 +162,16 @@ public class BenchmarkRunExecutorService {
                         .collect(Collectors.joining(","))
         );
         if (!result.supported()) {
-            benchmarkResult.setErrorMessage(result.errorMessage());
+            benchmarkResult.setErrorMessage(truncateErrorMessage(result.errorMessage()));
         }
         return benchmarkResult;
+    }
+
+    private String truncateErrorMessage(String errorMessage) {
+        if (errorMessage == null || errorMessage.length() <= BenchmarkResult.ERROR_MESSAGE_LIMIT) {
+            return errorMessage;
+        }
+        return errorMessage.substring(0, BenchmarkResult.ERROR_MESSAGE_LIMIT);
     }
 
     private void attachRelevanceMetrics(BenchmarkResult benchmarkResult, BenchmarkQuerySet querySet, String queryText) {
