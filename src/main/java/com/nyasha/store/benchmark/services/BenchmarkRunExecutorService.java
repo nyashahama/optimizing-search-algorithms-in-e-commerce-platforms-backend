@@ -23,7 +23,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -79,7 +78,6 @@ public class BenchmarkRunExecutorService {
     }
 
     @Async("benchmarkTaskExecutor")
-    @Transactional
     public void runAsync(Long runId, Long querySetId, Integer limit) {
         if (runId == null || querySetId == null) {
             throw new IllegalArgumentException("Benchmark run id and query set id are required");
