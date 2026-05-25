@@ -438,15 +438,15 @@ class RealWorldEndpointBehaviorIT {
                         .with(httpBasic(adminEmail, adminPassword)))
                 .andExpect(status().isOk());
 
-        JsonNode returnCreate = mockMvc.perform(post("/api/returns/{orderId}", orderId)
+        JsonNode returnCreate = readTree(mockMvc.perform(post("/api/returns/{orderId}", orderId)
                         .with(httpBasic(buyerEmail, buyerPassword))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"orderItemId":%d,"reason":"wrong size"}
                                 """.formatted(orderItemId)))
                 .andExpect(status().isOk())
-                .andReturn();
-        long returnId = readTree(returnCreate).path("returnId").asLong();
+                .andReturn());
+        long returnId = returnCreate.path("returnId").asLong();
         assertThat(returnId).isPositive();
 
         mockMvc.perform(post("/api/returns/{returnId}/reject", returnId).with(httpBasic(adminEmail, adminPassword)))
