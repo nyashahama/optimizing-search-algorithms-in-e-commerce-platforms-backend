@@ -121,19 +121,18 @@ public class BenchmarkRunExecutorService {
             applyLatencyMetrics(run, supportedLatencies);
             applyFreshnessMetrics(run);
             run.setReportDirectory(resolveReportDirectory(run).toString());
-            run = runRepository.save(run);
-
             persistArtifacts(run);
+            runRepository.save(run);
         } catch (Exception e) {
             run.setStatus(BenchmarkRunStatus.FAILED);
             run.setCompletedAt(LocalDateTime.now());
             run.setDurationMs(toMs(System.nanoTime() - startedAtNanos));
-            runRepository.save(run);
             try {
                 persistArtifacts(run);
             } catch (Exception artifactException) {
                 logger.error("Benchmark run {} failed to persist artifacts after failure", run.getId(), artifactException);
             }
+            runRepository.save(run);
             logger.error("Benchmark run {} failed", run.getId(), e);
         }
     }
