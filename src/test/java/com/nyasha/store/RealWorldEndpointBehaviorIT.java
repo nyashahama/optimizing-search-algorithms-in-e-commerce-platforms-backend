@@ -655,6 +655,23 @@ class RealWorldEndpointBehaviorIT {
         long targetUserId = createdUser.path("userId").asLong();
         assertThat(targetUserId).isPositive();
 
+        JsonNode loggedInUser = readTree(mockMvc.perform(post("/users/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(targetEmail, targetPassword)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(loggedInUser.path("userId").asLong()).isEqualTo(targetUserId);
+        assertThat(loggedInUser.path("email").asText()).isEqualTo(targetEmail);
+
+        mockMvc.perform(post("/users/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(targetEmail, randomPassword())))
+                .andExpect(status().isUnauthorized());
+
         JsonNode users = readTree(mockMvc.perform(get("/users").with(httpBasic(adminEmail, adminPassword)))
                 .andExpect(status().isOk())
                 .andReturn());
@@ -737,6 +754,23 @@ class RealWorldEndpointBehaviorIT {
         mockMvc.perform(get("/api/benchmarks/runs/{runId}/artifacts/missing.txt", runId)
                         .with(httpBasic(adminEmail, adminPassword)))
                 .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/benchmarks/runs/{runId}/report.md", runId)
+                        .with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk())
+                .andExpect(content -> assertThat(content.getResponse().getContentAsString()).contains("Run ID"));
+        mockMvc.perform(get("/api/benchmarks/runs/{runId}/report.json", runId)
+                        .with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk())
+                .andExpect(content -> assertThat(content.getResponse().getContentAsString()).isNotBlank());
+        mockMvc.perform(get("/api/benchmarks/runs/{runId}/latency.csv", runId)
+                        .with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk())
+                .andExpect(content -> assertThat(content.getResponse().getContentAsString()).contains("queryText,engine,latencyMs"));
+        mockMvc.perform(get("/api/benchmarks/runs/{runId}/relevance.csv", runId)
+                        .with(httpBasic(adminEmail, adminPassword)))
+                .andExpect(status().isOk())
+                .andExpect(content -> assertThat(content.getResponse().getContentAsString()).contains("queryText,engine,precisionAtK"));
     }
 
     private Category seedCategory(String name) {
