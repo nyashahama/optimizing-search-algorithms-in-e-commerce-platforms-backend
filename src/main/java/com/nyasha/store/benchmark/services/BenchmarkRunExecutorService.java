@@ -87,6 +87,7 @@ public class BenchmarkRunExecutorService {
                 .orElseThrow(() -> new IllegalArgumentException("Benchmark run not found"));
         BenchmarkQuerySet querySet = querySetRepository.findById(querySetId)
                 .orElseThrow(() -> new IllegalArgumentException("Query set not found"));
+        run.setQuerySet(querySet);
 
         int normalizedLimit = limit == null || limit <= 0 ? DEFAULT_QUERY_LIMIT : Math.min(limit, 100);
         List<BenchmarkQuery> sortedQueries = querySet.getQueries().stream()
@@ -128,6 +129,11 @@ public class BenchmarkRunExecutorService {
             run.setCompletedAt(LocalDateTime.now());
             run.setDurationMs(toMs(System.nanoTime() - startedAtNanos));
             runRepository.save(run);
+            try {
+                persistArtifacts(run);
+            } catch (Exception artifactException) {
+                logger.error("Benchmark run {} failed to persist artifacts after failure", run.getId(), artifactException);
+            }
             logger.error("Benchmark run {} failed", run.getId(), e);
         }
     }
