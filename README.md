@@ -1,16 +1,67 @@
-# E-commerce Search Optimization Backend
+# Ecommerce Commerce Backend + Search Optimization Engine
 
-This project is being rebuilt into a production-style search benchmarking lab using e-commerce catalog data.
+This repository is a production-style Spring Boot backend for real storefront workflows.
 
-## Goal
+It combines:
 
-Compare search approaches across latency, indexing throughput, freshness, and relevance:
+1. Complete commerce API surfaces for discovery, cart, checkout, orders, reviews, addresses, inventory, returns, and payments.
+2. Multi-engine search comparison (`sql_like`, `postgres_fts`, `in_memory`, and `opensearch`) for product discovery and ranking benchmarking.
+3. Operational controls (`/api/index`, `/api/benchmarks`, `/api/ops`) that show indexing and search-latency health at runtime.
 
-1. SQL LIKE
-2. PostgreSQL full-text search
-3. Custom in-memory inverted index
-4. OpenSearch BM25
+The project goal is practical: teams can reuse this API as a starting point for an ecommerce platform while immediately validating search tradeoffs.
 
+## Product Description
+
+This is not only a benchmark project. It is a **commerce-ready backend baseline** with:
+
+- Secure, role-aware access for customer/admin paths.
+- Public storefront read endpoints for discovery (`products`, `categories`, `search`, public reviews).
+- Stable, tested API contracts for every major route in one place.
+- A clear execution strategy for index freshness, benchmarking, and ops readiness.
+
+## Endpoint Surface That Matters for Ecommerce
+
+- **Authentication and accounts**: `POST /users/register`, `POST /users/login`, `GET/PUT/DELETE /users`
+- **Catalog and search**: `GET /api/products`, `GET /api/products/{id}`, `POST/PUT/DELETE /api/products`, `GET /api/categories`, `GET /api/search`, `GET /api/search/compare`
+- **Wishlist**: `GET /api/wishlists/me`, `POST /api/wishlists/me/items`, `DELETE /api/wishlists/me/items/{itemId}`
+- **Cart and wishlist**: `GET /api/carts/me`, `POST /api/carts/me/items`, `PATCH /api/carts/me/items/{itemId}`, `DELETE /api/carts/me/items/{itemId}`, `DELETE /api/carts/me`
+- **Checkout and orders**: `POST /api/checkouts/preview`, `POST /api/checkouts/confirm`, `GET /api/orders/me`, `POST /api/orders/{id}/pack|ship|delivered|cancel`
+- **Returns and reviews**: `POST /api/returns/{orderId}`, `POST /api/returns/{returnId}/approve|reject|refund`, `POST /api/reviews`, `GET /api/reviews/products/{productId}`
+- **Inventory and suppliers**: `GET /api/inventory/{productId}`, `PUT /api/inventory/{productId}`, `PATCH /api/inventory/{productId}/adjust`, `GET /api/inventory/low-stock`, `GET /api/suppliers`
+- **Payments and addresses**: `GET /api/payments/orders/{orderId}`, `POST /api/payments/orders/{orderId}/capture|refund`, `POST/GET/PUT/DELETE /api/addresses/me`
+- **Benchmark and operations**: `POST /api/benchmarks/runs`, `GET /api/benchmarks/runs/{id}`, `GET /api/benchmarks/runs/{id}/artifacts/*`, `POST /api/index/rebuild`, `GET /api/ops/status`
+- **API readiness**: The endpoint list above is enforced by tests and contract checks, so endpoint additions require explicit updates.
+
+Shopping, checkout, catalog, and search endpoint access is now intentionally separated:
+
+- Public storefront: `GET /api/products`, `GET /api/categories`, `GET /api/search`, `GET /api/reviews/products/{productId}`.
+- Authenticated customer workflows: cart, checkout, wishlist, address, order, review and payment reads/writes.
+- Admin workflows: catalog mutation, supplier management, index rebuild, benchmark orchestration, and operational insights.
+
+## Commerce Readiness Controls
+
+- `EndpointAuthorizationMatrixTest` validates auth expectations and successful response behavior for all documented endpoints.
+- `EndpointContractCoverageTest` enforces that every controller route is represented in the matrix.
+- `EndpointDocumentationAlignmentTest` checks that the README-style catalog is represented in code-level coverage.
+- `CommerceFlowSmokeIT` validates a real buyer flow: browse → cart → preview → confirm → order list → compare.
+- `OperationsReadinessEndpointTest` verifies health/info are public and operational telemetry remains admin-only.
+
+### What makes this adoptable
+
+- Strongly test-driven endpoint contracts instead of ad-hoc route growth.
+- Public discovery routes for SEO-friendly browsing without requiring frontend auth bootstrap.
+- Backend checks for business-critical flows (`idempotency`, payment capture/refund gating, return lifecycle states).
+- Role-aware separation between customer and admin use cases.
+
+## Ecommerce Team Validation Checklist
+
+Use this checklist before demoing or sharing:
+
+- `./mvnw test -Dtest=EndpointAuthorizationMatrixTest,EndpointContractCoverageTest`
+- `./mvnw test -Dtest=EndpointDocumentationAlignmentTest,OperationsReadinessEndpointTest`
+- `./mvnw test -Dtest=CommerceFlowSmokeIT`
+
+If all pass, the API is in a credible position for storefront pilots and integration planning.
 ## Project Status
 
 Current phase: **Phase 7 - Observability And Operational Playbooks**
@@ -31,6 +82,28 @@ Phase 0 made the existing Spring Boot backend buildable, testable, documented, a
 | Phase 6 | Commerce Operations Hardening | Complete |
 | Phase 7 | Observability And Operational Playbooks | Complete |
 
+## Ecommerce API Readiness Controls
+
+This backend is built as an adoptable commerce API backbone with executable endpoint guarantees:
+
+- `EndpointAuthorizationMatrixTest` covers route-level authentication and authorization expectations for all ecommerce endpoints.
+- `EndpointContractCoverageTest` enforces that route definitions in controllers and the matrix stay in lockstep.
+- `CommerceFlowSmokeIT` validates a real-commerce user journey that spans catalog, cart, checkout, order, and search comparison.
+- `OperationsReadinessEndpointTest` verifies operational endpoint behavior (`/actuator/health`, `/actuator/info`, and admin-only metrics endpoints).
+- `*ControllerTest` now covers additional ecommerce controller surfaces (catalog, search, wishlist, returns, checkout, index rebuild, and benchmark artifact endpoints) with direct service-delegation assertions.
+
+### Frontend interoperability
+
+The platform is prepared for browser/front-end integrations:
+- CORS is enabled for common local storefront ports (`3000`, `4200`).
+- `PATCH` is explicitly allowed for browser pre-flights, so line-item updates (for carts/inventory) can be called from SPAs without custom gateway overrides.
+
+Use this check when accepting endpoint changes:
+
+```bash
+./mvnw test -Dtest=EndpointAuthorizationMatrixTest,EndpointContractCoverageTest
+./mvnw test -Dtest=OperationsReadinessEndpointTest
+```
 ## Tech Stack
 
 - Java 21
@@ -54,6 +127,12 @@ Expected: Java 21.
 
 ```bash
 ./mvnw test
+```
+
+If you cannot run Maven locally (or JAVA_HOME is not configured), use the repo helper:
+
+```bash
+./scripts/verify-endpoint-readiness.sh
 ```
 
 ## Search API

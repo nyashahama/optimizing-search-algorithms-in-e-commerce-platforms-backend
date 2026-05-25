@@ -23,7 +23,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -79,7 +78,6 @@ public class BenchmarkRunExecutorService {
     }
 
     @Async("benchmarkTaskExecutor")
-    @Transactional
     public void runAsync(Long runId, Long querySetId, Integer limit) {
         if (runId == null || querySetId == null) {
             throw new IllegalArgumentException("Benchmark run id and query set id are required");
@@ -89,6 +87,7 @@ public class BenchmarkRunExecutorService {
                 .orElseThrow(() -> new IllegalArgumentException("Benchmark run not found"));
         BenchmarkQuerySet querySet = querySetRepository.findById(querySetId)
                 .orElseThrow(() -> new IllegalArgumentException("Query set not found"));
+        run.setQuerySet(querySet);
 
         int normalizedLimit = limit == null || limit <= 0 ? DEFAULT_QUERY_LIMIT : Math.min(limit, 100);
         List<BenchmarkQuery> sortedQueries = querySet.getQueries().stream()
@@ -105,7 +104,7 @@ public class BenchmarkRunExecutorService {
             for (BenchmarkQuery query : sortedQueries) {
                 String queryText = query.getQueryText();
                 for (SearchEngineType engine : SearchEngineType.values()) {
-                    SearchResult result = productSearchService.search(engine.canonical(), queryText, normalizedLimit);
+                    SearchResult result = safeSearch(run, queryText, normalizedLimit, engine);
                     BenchmarkResult benchmarkResult = mapResult(run, queryText, result, engine);
                     attachRelevanceMetrics(benchmarkResult, querySet, queryText);
                     resultRepository.save(benchmarkResult);
@@ -122,16 +121,32 @@ public class BenchmarkRunExecutorService {
             applyLatencyMetrics(run, supportedLatencies);
             applyFreshnessMetrics(run);
             run.setReportDirectory(resolveReportDirectory(run).toString());
-            run = runRepository.save(run);
-
             persistArtifacts(run);
+            runRepository.save(run);
         } catch (Exception e) {
             run.setStatus(BenchmarkRunStatus.FAILED);
             run.setCompletedAt(LocalDateTime.now());
             run.setDurationMs(toMs(System.nanoTime() - startedAtNanos));
+            try {
+                persistArtifacts(run);
+            } catch (Exception artifactException) {
+                logger.error("Benchmark run {} failed to persist artifacts after failure", run.getId(), artifactException);
+            }
             runRepository.save(run);
             logger.error("Benchmark run {} failed", run.getId(), e);
-            throw e;
+        }
+    }
+
+    private SearchResult safeSearch(BenchmarkRun run, String queryText, int limit, SearchEngineType engine) {
+        try {
+            return productSearchService.search(engine.canonical(), queryText, limit);
+        } catch (Exception e) {
+            logger.warn("Benchmark run {} search failed for engine {} and query '{}'",
+                    run.getId(),
+                    engine,
+                    queryText,
+                    e);
+            return SearchResult.unsupported(engine, "Search execution failed: " + e.getMessage());
         }
     }
 
@@ -150,9 +165,16 @@ public class BenchmarkRunExecutorService {
                         .collect(Collectors.joining(","))
         );
         if (!result.supported()) {
-            benchmarkResult.setErrorMessage(result.errorMessage());
+            benchmarkResult.setErrorMessage(truncateErrorMessage(result.errorMessage()));
         }
         return benchmarkResult;
+    }
+
+    private String truncateErrorMessage(String errorMessage) {
+        if (errorMessage == null || errorMessage.length() <= BenchmarkResult.ERROR_MESSAGE_LIMIT) {
+            return errorMessage;
+        }
+        return errorMessage.substring(0, BenchmarkResult.ERROR_MESSAGE_LIMIT);
     }
 
     private void attachRelevanceMetrics(BenchmarkResult benchmarkResult, BenchmarkQuerySet querySet, String queryText) {

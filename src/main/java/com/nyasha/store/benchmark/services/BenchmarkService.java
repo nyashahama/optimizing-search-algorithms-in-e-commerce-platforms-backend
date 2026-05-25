@@ -131,9 +131,16 @@ public class BenchmarkService {
                         .collect(Collectors.joining(","))
         );
         if (!result.supported()) {
-            benchmarkResult.setErrorMessage(result.errorMessage());
+            benchmarkResult.setErrorMessage(truncateErrorMessage(result.errorMessage()));
         }
         return benchmarkResult;
+    }
+
+    private String truncateErrorMessage(String errorMessage) {
+        if (errorMessage == null || errorMessage.length() <= BenchmarkResult.ERROR_MESSAGE_LIMIT) {
+            return errorMessage;
+        }
+        return errorMessage.substring(0, BenchmarkResult.ERROR_MESSAGE_LIMIT);
     }
 
     private void attachRelevanceMetrics(BenchmarkResult benchmarkResult, BenchmarkQuerySet querySet, String queryText) {

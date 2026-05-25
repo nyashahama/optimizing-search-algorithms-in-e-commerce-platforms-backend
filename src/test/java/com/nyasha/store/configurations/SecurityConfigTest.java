@@ -38,9 +38,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.Optional;
 
 import static org.mockito.Mockito.when;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = {
@@ -202,6 +205,19 @@ class SecurityConfigTest {
 
         mockMvc.perform(post("/api/payments/orders/1/capture").with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void corsAllowsFrontendPatchRequestsForCartMutations() throws Exception {
+        mockMvc.perform(
+                        options("/api/carts/me/items/1")
+                                .header("Origin", "http://localhost:3000")
+                                .header("Access-Control-Request-Method", "PATCH")
+                                .header("Access-Control-Request-Headers", "content-type")
+                )
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"))
+                .andExpect(header().string("Access-Control-Allow-Methods", containsString("PATCH")));
     }
 
     private User testUser(Long id, String email) {

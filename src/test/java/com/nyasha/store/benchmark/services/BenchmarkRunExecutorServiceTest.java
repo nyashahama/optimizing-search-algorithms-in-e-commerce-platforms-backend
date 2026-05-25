@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -118,6 +119,155 @@ class BenchmarkRunExecutorServiceTest {
         assertThat(savedRun.get().getThroughputQueriesPerSecond()).isNotNull();
     }
 
+    @Test
+    void runAsyncTruncatesUnsupportedErrorMessage() throws Exception {
+        BenchmarkQuerySetRepository querySetRepository = mock(BenchmarkQuerySetRepository.class);
+        BenchmarkJudgmentRepository judgmentRepository = mock(BenchmarkJudgmentRepository.class);
+        BenchmarkRunRepository runRepository = mock(BenchmarkRunRepository.class);
+        BenchmarkResultRepository resultRepository = mock(BenchmarkResultRepository.class);
+        ProductSearchService productSearchService = mock(ProductSearchService.class);
+        IndexingEventRepository indexingEventRepository = mock(IndexingEventRepository.class);
+        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+
+        BenchmarkQuerySet querySet = querySet();
+        BenchmarkRun run = run(querySet);
+        List<BenchmarkResult> savedResults = new ArrayList<>();
+        AtomicReference<BenchmarkRun> savedRun = new AtomicReference<>();
+        String longErrorMessage = "E".repeat(BenchmarkResult.ERROR_MESSAGE_LIMIT + 60);
+
+        when(querySetRepository.findById(7L)).thenReturn(Optional.of(querySet));
+        when(judgmentRepository.findByQuerySetAndQueryTextIgnoreCase(eq(querySet), eq("laptop"))).thenReturn(List.of());
+        when(indexingEventRepository.findAll()).thenReturn(List.of());
+        when(runRepository.findById(42L)).thenReturn(Optional.of(run));
+        when(runRepository.save(any(BenchmarkRun.class))).thenAnswer(invocation -> {
+            BenchmarkRun value = invocation.getArgument(0);
+            run.setId(value.getId());
+            run.setStatus(value.getStatus());
+            run.setStartedAt(value.getStartedAt());
+            run.setCompletedAt(value.getCompletedAt());
+            run.setDurationMs(value.getDurationMs());
+            run.setThroughputQueriesPerSecond(value.getThroughputQueriesPerSecond());
+            run.setLatencyMinMs(value.getLatencyMinMs());
+            run.setLatencyP50Ms(value.getLatencyP50Ms());
+            run.setLatencyP95Ms(value.getLatencyP95Ms());
+            run.setLatencyP99Ms(value.getLatencyP99Ms());
+            run.setLatencyAvgMs(value.getLatencyAvgMs());
+            run.setFreshnessP50Ms(value.getFreshnessP50Ms());
+            run.setFreshnessP95Ms(value.getFreshnessP95Ms());
+            run.setFreshnessP99Ms(value.getFreshnessP99Ms());
+            run.setFreshnessAvgMs(value.getFreshnessAvgMs());
+            run.setReportDirectory(value.getReportDirectory());
+            savedRun.set(run);
+            return value;
+        });
+        when(resultRepository.save(any(BenchmarkResult.class))).thenAnswer(invocation -> {
+            BenchmarkResult result = invocation.getArgument(0);
+            result.setId((long) (savedResults.size() + 1));
+            savedResults.add(result);
+            return result;
+        });
+        when(resultRepository.findByRunOrderByQueryTextAscEngineAsc(any(BenchmarkRun.class))).thenReturn(savedResults);
+        when(productSearchService.search(anyString(), eq("laptop"), eq(5))).thenAnswer(invocation ->
+                SearchResult.unsupported(SearchEngineType.from(invocation.getArgument(0)), longErrorMessage)
+        );
+
+        BenchmarkRunExecutorService service = new BenchmarkRunExecutorService(
+                querySetRepository,
+                judgmentRepository,
+                runRepository,
+                resultRepository,
+                productSearchService,
+                indexingEventRepository,
+                objectMapper,
+                reportDirectory.toString()
+        );
+
+        service.runAsync(42L, 7L, 5);
+
+        assertThat(savedRun.get()).isNotNull();
+        assertThat(savedRun.get().getStatus()).isEqualTo(BenchmarkRunStatus.COMPLETED);
+        assertThat(savedResults).hasSize(SearchEngineType.values().length);
+        assertThat(savedResults).allMatch(result ->
+                result.getErrorMessage() != null &&
+                        result.getErrorMessage().length() <= BenchmarkResult.ERROR_MESSAGE_LIMIT
+        );
+    }
+
+    @Test
+    void runAsyncHandlesSearchEngineFailuresAsUnsupported() throws Exception {
+        BenchmarkQuerySetRepository querySetRepository = mock(BenchmarkQuerySetRepository.class);
+        BenchmarkJudgmentRepository judgmentRepository = mock(BenchmarkJudgmentRepository.class);
+        BenchmarkRunRepository runRepository = mock(BenchmarkRunRepository.class);
+        BenchmarkResultRepository resultRepository = mock(BenchmarkResultRepository.class);
+        ProductSearchService productSearchService = mock(ProductSearchService.class);
+        IndexingEventRepository indexingEventRepository = mock(IndexingEventRepository.class);
+        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+
+        BenchmarkQuerySet querySet = querySet();
+        BenchmarkRun run = run(querySet);
+        List<BenchmarkResult> savedResults = new ArrayList<>();
+        AtomicReference<BenchmarkRun> savedRun = new AtomicReference<>();
+        AtomicInteger calls = new AtomicInteger();
+
+        when(querySetRepository.findById(7L)).thenReturn(Optional.of(querySet));
+        when(judgmentRepository.findByQuerySetAndQueryTextIgnoreCase(eq(querySet), eq("laptop"))).thenReturn(List.of());
+        when(indexingEventRepository.findAll()).thenReturn(List.of());
+        when(runRepository.findById(42L)).thenReturn(Optional.of(run));
+        when(runRepository.save(any(BenchmarkRun.class))).thenAnswer(invocation -> {
+            BenchmarkRun value = invocation.getArgument(0);
+            run.setId(value.getId());
+            run.setStatus(value.getStatus());
+            run.setStartedAt(value.getStartedAt());
+            run.setCompletedAt(value.getCompletedAt());
+            run.setDurationMs(value.getDurationMs());
+            run.setThroughputQueriesPerSecond(value.getThroughputQueriesPerSecond());
+            run.setLatencyMinMs(value.getLatencyMinMs());
+            run.setLatencyP50Ms(value.getLatencyP50Ms());
+            run.setLatencyP95Ms(value.getLatencyP95Ms());
+            run.setLatencyP99Ms(value.getLatencyP99Ms());
+            run.setLatencyAvgMs(value.getLatencyAvgMs());
+            run.setFreshnessP50Ms(value.getFreshnessP50Ms());
+            run.setFreshnessP95Ms(value.getFreshnessP95Ms());
+            run.setFreshnessP99Ms(value.getFreshnessP99Ms());
+            run.setFreshnessAvgMs(value.getFreshnessAvgMs());
+            run.setReportDirectory(value.getReportDirectory());
+            savedRun.set(run);
+            return value;
+        });
+        when(resultRepository.save(any(BenchmarkResult.class))).thenAnswer(invocation -> {
+            BenchmarkResult result = invocation.getArgument(0);
+            result.setId((long) (savedResults.size() + 1));
+            savedResults.add(result);
+            return result;
+        });
+        when(resultRepository.findByRunOrderByQueryTextAscEngineAsc(any(BenchmarkRun.class))).thenReturn(savedResults);
+        when(productSearchService.search(anyString(), eq("laptop"), eq(5))).thenAnswer(invocation -> {
+            if (calls.getAndIncrement() == 0) {
+                throw new IllegalStateException("Search backend unavailable");
+            }
+            return SearchResult.success(SearchEngineType.from(invocation.getArgument(0)), 12L, List.of(product(1L)));
+        });
+
+        BenchmarkRunExecutorService service = new BenchmarkRunExecutorService(
+                querySetRepository,
+                judgmentRepository,
+                runRepository,
+                resultRepository,
+                productSearchService,
+                indexingEventRepository,
+                objectMapper,
+                reportDirectory.toString()
+        );
+
+        service.runAsync(42L, 7L, 5);
+
+        assertThat(savedRun.get()).isNotNull();
+        assertThat(savedRun.get().getStatus()).isEqualTo(BenchmarkRunStatus.COMPLETED);
+        assertThat(savedResults).hasSize(SearchEngineType.values().length);
+        assertThat(savedResults.get(0).isSupported()).isFalse();
+        assertThat(savedResults.get(0).getErrorMessage()).contains("Search execution failed");
+    }
+
     private BenchmarkQuerySet querySet() {
         BenchmarkQuerySet querySet = new BenchmarkQuerySet();
         querySet.setId(7L);
@@ -157,4 +307,3 @@ class BenchmarkRunExecutorServiceTest {
         return product;
     }
 }
-

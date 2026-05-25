@@ -6,6 +6,8 @@ import com.nyasha.store.entities.Product;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
@@ -13,10 +15,12 @@ import java.util.UUID;
 
 @Component
 public class SearchIndexingPublisher {
+    private static final Logger logger = LoggerFactory.getLogger(SearchIndexingPublisher.class);
 
     private static final int DEFAULT_MAX_RETRIES = 4;
     private static final int DEFAULT_PRODUCER_RETRIES = 3;
     private static final long DEFAULT_PRODUCER_RETRY_DELAY_MS = 500L;
+    private static final long DEFAULT_PRODUCER_ACK_TIMEOUT_MS = 5000L;
 
     private final IndexingEventRepository indexingEventRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
@@ -25,6 +29,7 @@ public class SearchIndexingPublisher {
     private final int maxRetries;
     private final int producerRetryAttempts;
     private final long producerRetryDelayMs;
+    private final long producerAckTimeoutMs;
 
     public SearchIndexingPublisher(
             IndexingEventRepository indexingEventRepository,
@@ -33,7 +38,8 @@ public class SearchIndexingPublisher {
             @Value("${search.infrastructure.kafka.product-event-topic:product-index-events}") String topicName,
             @Value("${search.infrastructure.kafka.max-retries:" + DEFAULT_MAX_RETRIES + "}") int maxRetries,
             @Value("${search.infrastructure.kafka.producer.retry-attempts:" + DEFAULT_PRODUCER_RETRIES + "}") int producerRetryAttempts,
-            @Value("${search.infrastructure.kafka.producer.retry-delay-ms:" + DEFAULT_PRODUCER_RETRY_DELAY_MS + "}") long producerRetryDelayMs
+            @Value("${search.infrastructure.kafka.producer.retry-delay-ms:" + DEFAULT_PRODUCER_RETRY_DELAY_MS + "}") long producerRetryDelayMs,
+            @Value("${search.infrastructure.kafka.producer.ack-timeout-ms:" + DEFAULT_PRODUCER_ACK_TIMEOUT_MS + "}") long producerAckTimeoutMs
     ) {
         this.indexingEventRepository = indexingEventRepository;
         this.kafkaTemplate = kafkaTemplate;
@@ -42,6 +48,7 @@ public class SearchIndexingPublisher {
         this.maxRetries = Math.max(1, maxRetries);
         this.producerRetryAttempts = Math.max(1, producerRetryAttempts);
         this.producerRetryDelayMs = Math.max(0L, producerRetryDelayMs);
+        this.producerAckTimeoutMs = Math.max(100L, producerAckTimeoutMs);
     }
 
     public IndexingEvent publish(Product product, IndexingEventType eventType) {
@@ -85,8 +92,9 @@ public class SearchIndexingPublisher {
         for (int attempt = 1; attempt <= producerRetryAttempts; attempt++) {
             try {
                 kafkaTemplate.send(topicName, event.getEventId(), payload)
-                        .get(5, TimeUnit.SECONDS);
+                        .get(producerAckTimeoutMs, TimeUnit.MILLISECONDS);
                 event.setStatus(IndexingEventStatus.PENDING);
+                event.setErrorMessage(null);
                 indexingEventRepository.save(event);
                 return;
             } catch (Exception e) {
@@ -97,6 +105,13 @@ public class SearchIndexingPublisher {
                 sleepBetweenRetries(attempt);
             }
         }
+
+        event.setStatus(IndexingEventStatus.FAILED);
+        event.setRetryCount(event.getRetryCount() == null ? 1 : event.getRetryCount() + 1);
+        String failureMessage = lastFailure == null ? "Unknown publish failure" : lastFailure.getMessage();
+        event.setErrorMessage("Index event publish failed: " + failureMessage);
+        indexingEventRepository.save(event);
+        logger.warn("Index event {} publish failed after {} attempts", event.getEventId(), producerRetryAttempts);
 
         throw new IllegalStateException("Failed to publish indexing event after producer retries", lastFailure);
     }
